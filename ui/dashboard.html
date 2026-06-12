@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WEBTOON·OCR — Translation Overlay System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,700;1,400&family=Nunito:wght@400;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #090909;
+      --panel:     #111111;
+      --panel-alt: #141414;
+      --border:    #232323;
+      --border-hi: #FFFFFF;
+      --y:         #FFE500;
+      --r:         #FF2D55;
+      --c:         #00D4FF;
+      --g:         #39FF14;
+      --text:      #EFEFEF;
+      --dim:       #444;
+      --muted:     #777;
+      --fd:        'Bebas Neue', Impact, sans-serif;
+      --fm:        'IBM Plex Mono', 'Courier New', monospace;
+      --fu:        'Nunito', sans-serif;
+    }
+
+    html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--fu); -webkit-font-smoothing: antialiased; }
+
+    /* ─── GRAIN OVERLAY ─── */
+    body::after {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+      opacity: 0.03; pointer-events: none; z-index: 9999;
+    }
+
+    /* ─── SPEED LINES BG ─── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background: repeating-conic-gradient(at 50% 35%, transparent 0deg 4.7deg, rgba(255,229,0,0.006) 4.7deg 5deg);
+      pointer-events: none; z-index: 0;
+    }
+
+    /* ─── APP GRID ─── */
+    .app {
+      position: relative; z-index: 1;
+      display: grid;
+      grid-template-rows: 52px 1fr 44px;
+      height: 100vh; width: 100vw;
+    }
+
+    /* ══════════════════════════════════════
+       TOPBAR
+    ══════════════════════════════════════ */
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 20px;
+      border-bottom: 2px solid var(--border-hi);
+      background: var(--bg);
+      position: relative; z-index: 100;
+    }
+    .topbar::after {
+      content: ''; position: absolute; bottom: -5px; left: 0; right: 0;
+      height: 3px; background: var(--y); opacity: 0.55;
+    }
+
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand-glyph {
+      width: 22px; height: 22px;
+      background: var(--y);
+      clip-path: polygon(0 0, 100% 0, 100% 60%, 60% 100%, 0 100%);
+    }
+    .brand-name {
+      font-family: var(--fd);
+      font-size: 28px; letter-spacing: 0.05em; line-height: 1;
+    }
+    .brand-dot { color: var(--y); }
+    .brand-tag {
+      font-family: var(--fm); font-size: 9px; letter-spacing: 0.12em;
+      color: var(--dim); padding: 2px 6px; border: 1px solid var(--border);
+      align-self: center;
+    }
+
+    .status-pill {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 16px;
+      border: 1px solid var(--border); background: var(--panel);
+      font-family: var(--fm); font-size: 11px; letter-spacing: 0.18em;
+      transition: border-color 0.3s;
+    }
+    .status-pill.is-active { border-color: var(--g); }
+    .status-pill.is-scanning { border-color: var(--c); }
+    .s-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--dim); transition: background 0.3s, box-shadow 0.3s;
+    }
+    .status-pill.is-active   .s-dot { background: var(--g); box-shadow: 0 0 8px var(--g); animation: blink 1.2s ease-in-out infinite; }
+    .status-pill.is-scanning .s-dot { background: var(--c); box-shadow: 0 0 8px var(--c); animation: blink 0.5s ease-in-out infinite; }
+    .s-label { color: var(--muted); transition: color 0.3s; }
+    .status-pill.is-active   .s-label { color: var(--g); }
+    .status-pill.is-scanning .s-label { color: var(--c); }
+
+    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
+
+    .topbar-right { display: flex; align-items: center; gap: 10px; }
+    .lang-pair { display: flex; align-items: center; gap: 6px; font-family: var(--fm); font-size: 12px; }
+    .lang { padding: 3px 9px; background: var(--panel-alt); border: 1px solid var(--border); font-weight: 700; letter-spacing: 0.1em; }
+    .lang-arr { color: var(--y); font-size: 13px; }
+    .icon-btn {
+      width: 32px; height: 32px;
+      background: none; border: 1px solid var(--border); color: var(--muted);
+      cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s;
+    }
+    .icon-btn:hover { border-color: var(--muted); color: var(--text); }
+
+    /* ══════════════════════════════════════
+       CONTENT GRID
+    ══════════════════════════════════════ */
+    .content {
+      display: grid;
+      grid-template-columns: 264px 1fr 306px;
+      overflow: hidden;
+    }
+
+    /* ══════════════════════════════════════
+       LEFT SIDEBAR
+    ══════════════════════════════════════ */
+    .sidebar-l {
+      border-right: 2px solid var(--border-hi);
+      background: var(--panel);
+      display: flex; flex-direction: column;
+      overflow-y: auto; overflow-x: hidden;
+      position: relative;
+    }
+    /* halftone texture */
+    .sidebar-l::before {
+      content: '';
+      position: absolute; inset: 0;
+      background-image: radial-gradient(circle, #1c1c1c 1px, transparent 1px);
+      background-size: 10px 10px;
+      pointer-events: none; z-index: 0; opacity: 0.7;
+    }
+    .sidebar-l > * { position: relative; z-index: 1; }
+    .sidebar-l::-webkit-scrollbar { width: 3px; }
+    .sidebar-l::-webkit-scrollbar-thumb { background: var(--border); }
+
+    .ctrl-block { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+    .blk-title {
+      font-family: var(--fd); font-size: 12px; letter-spacing: 0.25em;
+      color: var(--dim); margin-bottom: 11px;
+    }
+
+    /* START BUTTON */
+    .btn-start {
+      width: 100%; height: 76px;
+      background: var(--bg); border: 3px solid var(--y);
+      color: var(--y); font-family: var(--fd);
+      font-size: 34px; letter-spacing: 0.22em;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px;
+      position: relative; overflow: hidden; transition: color 0.15s;
+    }
+    .btn-start::before {
+      content: ''; position: absolute; inset: 0;
+      background: var(--y); transform: translateX(-101%);
+      transition: transform 0.2s ease-in-out; z-index: 0;
+    }
+    .btn-start:hover::before { transform: translateX(0); }
+    .btn-start:hover { color: var(--bg); }
+    .btn-start.stop { border-color: var(--r); color: var(--r); }
+    .btn-start.stop::before { background: var(--r); }
+    .btn-start.stop:hover { color: var(--bg); }
+    .btn-start .bi, .btn-start .bl { position: relative; z-index: 1; }
+    .btn-start .bi { font-size: 22px; }
+
+    /* REGION */
+    .region-box {
+      background: var(--bg); border: 1px solid var(--border);
+      padding: 10px 12px; margin-bottom: 8px;
+    }
+    .coord-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 8px; }
+    .coord-row { display: flex; align-items: center; gap: 6px; font-family: var(--fm); font-size: 11px; }
+    .coord-k { color: var(--y); font-weight: 700; font-size: 9px; min-width: 12px; }
+    .coord-v { color: var(--text); }
+    .btn-sec {
+      width: 100%; padding: 7px;
+      background: none; border: 1px solid var(--border); color: var(--muted);
+      font-family: var(--fm); font-size: 9px; letter-spacing: 0.18em;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .btn-sec:hover { border-color: var(--muted); color: var(--text); }
+
+    /* MONITOR SELECT */
+    .monitor-sel {
+      width: 100%; padding: 6px 8px; margin-bottom: 8px;
+      background: var(--bg); border: 1px solid var(--border);
+      color: var(--text); font-family: var(--fm); font-size: 10px;
+      letter-spacing: 0.05em; cursor: pointer; outline: none;
+      -webkit-appearance: none; appearance: none;
+    }
+    .monitor-sel:focus { border-color: var(--y); }
+    .monitor-sel option { background: var(--panel); }
+
+    /* TOGGLES */
+    .toggle-list { display: flex; flex-direction: column; gap: 9px; }
+    .t-row { display: flex; align-items: center; justify-content: space-between; }
+    .t-lbl { font-family: var(--fm); font-size: 10px; letter-spacing: 0.12em; color: var(--muted); }
+    .toggle {
+      width: 36px; height: 18px;
+      border: 1px solid var(--border); border-radius: 9px;
+      background: var(--bg); cursor: pointer; position: relative;
+      transition: all 0.2s;
+    }
+    .toggle::after {
+      content: ''; position: absolute;
+      width: 12px; height: 12px; border-radius: 50%;
+      background: var(--dim); top: 2px; left: 2px;
+      transition: all 0.2s;
+    }
+    .toggle.on { border-color: var(--y); background: rgba(255,229,0,0.08); }
+    .toggle.on::after { background: var(--y); left: 20px; box-shadow: 0 0 6px rgba(255,229,0,0.5); }
+
+    /* DEBOUNCE SLIDER */
+    .slider-row { display: flex; align-items: center; gap: 10px; }
+    input[type=range] { flex: 1; accent-color: var(--y); height: 2px; }
+    .slider-val { font-family: var(--fm); font-size: 10px; color: var(--text); min-width: 36px; }
+
+    /* PIPELINE */
+    .pipeline { display: flex; flex-direction: column; }
+    .pipe-step {
+      padding: 7px 12px; border: 1px solid var(--border);
+      font-family: var(--fm); font-size: 9px; letter-spacing: 0.18em;
+      color: var(--dim); background: var(--bg);
+      transition: all 0.2s; display: flex; align-items: center; gap: 8px;
+    }
+    .pipe-step::before { content: '○'; font-size: 7px; transition: all 0.2s; }
+    .pipe-step.active { border-color: var(--c); color: var(--c); background: rgba(0,212,255,0.04); }
+    .pipe-step.active::before { content: '●'; }
+    .pipe-step.done { border-color: var(--g); color: var(--g); }
+    .pipe-step.done::before { content: '✓'; }
+    .pipe-join { width: 1px; height: 8px; background: var(--border); margin-left: 17px; transition: background 0.2s; }
+    .pipe-join.lit { background: var(--g); }
+    .pipe-join.act { background: var(--c); }
+
+    /* ══════════════════════════════════════
+       CAPTURE AREA
+    ══════════════════════════════════════ */
+    .capture-area { display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
+
+    .cap-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .cap-title { font-family: var(--fd); font-size: 13px; letter-spacing: 0.22em; color: var(--dim); flex: 1; }
+    .fps-disp { font-family: var(--fm); font-size: 10px; color: var(--dim); }
+    .live-tag {
+      font-family: var(--fm); font-size: 9px; letter-spacing: 0.22em;
+      padding: 2px 8px; border: 1px solid var(--g); color: var(--g);
+      background: rgba(57,255,20,0.06); opacity: 0; transition: opacity 0.3s;
+    }
+    .live-tag.on { opacity: 1; animation: blink 1.8s ease-in-out infinite; }
+
+    .cap-viewport {
+      flex: 1; position: relative; overflow: hidden; background: #0B0B0B;
+    }
+
+    /* Speed lines in viewport */
+    .cap-viewport::before {
+      content: ''; position: absolute; inset: 0;
+      background: repeating-conic-gradient(at 50% 50%, transparent 0deg 3.8deg, rgba(255,229,0,0.012) 3.8deg 4deg);
+      pointer-events: none; z-index: 1;
+    }
+
+    /* Corner brackets */
+    .corner {
+      position: absolute; width: 18px; height: 18px;
+      pointer-events: none; z-index: 20;
+    }
+    .corner.tl { top: 10px; left: 10px; border-top: 2px solid var(--y); border-left: 2px solid var(--y); }
+    .corner.tr { top: 10px; right: 10px; border-top: 2px solid var(--y); border-right: 2px solid var(--y); }
+    .corner.bl { bottom: 10px; left: 10px; border-bottom: 2px solid var(--y); border-left: 2px solid var(--y); }
+    .corner.br { bottom: 10px; right: 10px; border-bottom: 2px solid var(--y); border-right: 2px solid var(--y); }
+
+    /* Manga panels container */
+    #mangaSim { position: absolute; inset: 18px; display: block; opacity: 0; transition: opacity 0.6s; z-index: 2; }
+    #mangaSim.vis { opacity: 1; }
+
+    /* Detection boxes */
+    .dbox {
+      position: absolute; border: 2px solid var(--y);
+      pointer-events: none; z-index: 15;
+      animation: dbox-pulse 2s ease-in-out infinite;
+    }
+    .dbox-label {
+      position: absolute; top: -16px; left: 0;
+      font-family: var(--fm); font-size: 7px; letter-spacing: 0.12em;
+      color: var(--y); background: rgba(255,229,0,0.08); padding: 1px 4px; white-space: nowrap;
+    }
+    .dbox-conf {
+      position: absolute; bottom: -15px; right: 0;
+      font-family: var(--fm); font-size: 7px; color: rgba(255,229,0,0.6);
+    }
+    .trans-overlay {
+      position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.84);
+      display: flex; align-items: center; justify-content: center;
+      text-align: center; padding: 4px 6px;
+      font-family: var(--fu); font-size: 8px; font-weight: 800;
+      color: var(--y); line-height: 1.35;
+    }
+    @keyframes dbox-pulse {
+      0%,100% { border-color: var(--y); box-shadow: 0 0 0 0 transparent; }
+      50%      { border-color: rgba(255,229,0,0.7); box-shadow: 0 0 10px 2px rgba(255,229,0,0.15); }
+    }
+
+    /* Scan line */
+    .scan-line {
+      position: absolute; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent 0%, var(--c) 40%, var(--c) 60%, transparent 100%);
+      box-shadow: 0 0 12px var(--c), 0 0 24px rgba(0,212,255,0.25);
+      opacity: 0; transition: opacity 0.3s;
+      z-index: 18; pointer-events: none; top: 0;
+    }
+    .scan-line.on { opacity: 1; animation: scan-move 2.8s linear infinite; }
+    @keyframes scan-move { 0% { top: 0%; } 100% { top: 100%; } }
+
+    /* Debounce progress */
+    #debounceBar {
+      position: absolute; bottom: 0; left: 0; height: 3px;
+      background: var(--c); width: 0%; z-index: 19;
+      transition: width 0.05s linear;
+    }
+
+    /* Idle state */
+    .idle-state {
+      position: absolute; inset: 0; z-index: 22;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+      transition: opacity 0.4s;
+    }
+    .idle-state.out { opacity: 0; pointer-events: none; }
+    .idle-ico {
+      width: 72px; height: 72px; border-radius: 50%;
+      border: 2px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--dim);
+    }
+    .idle-txt { font-family: var(--fm); font-size: 11px; letter-spacing: 0.1em; color: var(--dim); text-align: center; line-height: 1.8; }
+
+    /* ══════════════════════════════════════
+       RIGHT SIDEBAR — TRANSLATION LOG
+    ══════════════════════════════════════ */
+    .sidebar-r {
+      border-left: 2px solid var(--border-hi);
+      background: var(--panel);
+      display: flex; flex-direction: column; overflow: hidden;
+      position: relative;
+    }
+    .sidebar-r::before {
+      content: ''; position: absolute; inset: 0;
+      background-image: radial-gradient(circle, #1c1c1c 1px, transparent 1px);
+      background-size: 10px 10px;
+      pointer-events: none; z-index: 0; opacity: 0.6;
+    }
+    .sidebar-r > * { position: relative; z-index: 1; }
+
+    .log-header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 9px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .log-title { font-family: var(--fd); font-size: 13px; letter-spacing: 0.22em; color: var(--dim); flex: 1; }
+    .log-n {
+      font-family: var(--fm); font-size: 9px;
+      padding: 2px 8px; border: 1px solid var(--border); color: var(--muted);
+      min-width: 28px; text-align: center;
+    }
+    .btn-clr {
+      font-family: var(--fm); font-size: 8px; letter-spacing: 0.15em;
+      padding: 3px 8px; background: none; border: 1px solid var(--border);
+      color: var(--dim); cursor: pointer; transition: all 0.15s;
+    }
+    .btn-clr:hover { border-color: var(--r); color: var(--r); }
+
+    .log-scroll {
+      flex: 1; overflow-y: auto; overflow-x: hidden;
+      padding: 12px; display: flex; flex-direction: column; gap: 10px;
+    }
+    .log-scroll::-webkit-scrollbar { width: 3px; }
+    .log-scroll::-webkit-scrollbar-thumb { background: var(--border); }
+
+    .log-empty {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 5px;
+      font-family: var(--fm); font-size: 10px; color: var(--dim);
+      letter-spacing: 0.06em; text-align: center;
+    }
+
+    /* Translation entry */
+    .t-entry {
+      background: var(--bg); border: 1px solid var(--border);
+      padding: 10px 12px;
+      animation: slide-in 0.28s ease-out;
+      position: relative; overflow: hidden;
+    }
+    .t-entry::before {
+      content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+      width: 3px; background: var(--y);
+    }
+    .t-entry.cached::before { background: var(--c); }
+    @keyframes slide-in { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+
+    .e-meta { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
+    .e-num { font-family: var(--fm); font-size: 8px; color: var(--dim); }
+    .e-badge { font-family: var(--fm); font-size: 7px; letter-spacing: 0.15em; padding: 1px 6px; }
+    .badge-t { border: 1px solid var(--y); color: var(--y); background: rgba(255,229,0,0.04); }
+    .badge-c { border: 1px solid var(--c); color: var(--c); background: rgba(0,212,255,0.04); }
+
+    .e-en { font-family: var(--fm); font-size: 10px; color: var(--muted); line-height: 1.5; margin-bottom: 5px; font-style: italic; }
+    .e-arr { font-size: 9px; color: var(--dim); margin-bottom: 4px; }
+    .e-pt { font-family: var(--fu); font-size: 12px; font-weight: 800; color: var(--text); line-height: 1.4; }
+
+    .e-conf { margin-top: 7px; }
+    .e-conf-lbl { font-family: var(--fm); font-size: 8px; color: var(--dim); }
+    .conf-bar { width: 100%; height: 2px; background: var(--border); margin-top: 3px; position: relative; overflow: hidden; }
+    .conf-fill { position: absolute; top: 0; left: 0; height: 100%; background: var(--y); transition: width 0.6s ease-out; }
+    .t-entry.cached .conf-fill { background: var(--c); }
+
+    /* ══════════════════════════════════════
+       STATS BAR
+    ══════════════════════════════════════ */
+    .statsbar {
+      display: flex; align-items: center;
+      border-top: 2px solid var(--border-hi);
+      background: var(--panel); padding: 0 18px; gap: 0;
+      overflow: hidden;
+    }
+    .stat { display: flex; align-items: center; gap: 7px; padding: 0 14px; }
+    .stat:first-child { padding-left: 0; }
+    .stat-lbl { font-family: var(--fm); font-size: 8px; letter-spacing: 0.22em; color: var(--dim); }
+    .stat-val { font-family: var(--fm); font-size: 14px; font-weight: 700; color: var(--text); transition: color 0.2s; }
+    .stat-val.lit { color: var(--y); }
+    .sdiv { width: 1px; height: 22px; background: var(--border); flex-shrink: 0; }
+    .engine-tag {
+      font-family: var(--fm); font-size: 8px; letter-spacing: 0.1em;
+      padding: 2px 7px; border: 1px solid var(--border); color: var(--dim);
+    }
+    .stats-right { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+
+    /* ══════════════════════════════════════
+       ACTION WORD POPUP
+    ══════════════════════════════════════ */
+    #actionWord {
+      position: fixed; top: 50%; left: 50%;
+      transform: translate(-50%, -50%) scale(0);
+      font-family: var(--fd); font-size: 88px; letter-spacing: 0.05em;
+      color: var(--y);
+      text-shadow: 5px 5px 0 #000, -5px -5px 0 #000, 5px -5px 0 #000, -5px 5px 0 #000, 0 5px 0 #000, 5px 0 0 #000;
+      pointer-events: none; z-index: 5000;
+    }
+    #actionWord.pop { animation: word-pop 0.65s ease-out forwards; }
+    @keyframes word-pop {
+      0%   { transform: translate(-50%, -50%) scale(0) rotate(-12deg); opacity: 1; }
+      35%  { transform: translate(-50%, -50%) scale(1.25) rotate(4deg); opacity: 1; }
+      65%  { transform: translate(-50%, -50%) scale(1) rotate(0deg); opacity: 1; }
+      100% { transform: translate(-50%, -50%) scale(1.1); opacity: 0; }
+    }
+
+    /* ══════════════════════════════════════
+       SCROLLBAR GLOBAL
+    ══════════════════════════════════════ */
+    ::-webkit-scrollbar { width: 3px; }
+    ::-webkit-scrollbar-thumb { background: var(--border); }
+  </style>
+</head>
+<body>
+<div id="actionWord"></div>
+
+<div class="app">
+
+  <!-- ═══ TOPBAR ═══ -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-glyph"></div>
+      <span class="brand-name">WEBTOON<span class="brand-dot">·</span>OCR</span>
+      <span class="brand-tag">v0.1.0-alpha</span>
+    </div>
+
+    <div class="status-pill" id="statusPill">
+      <div class="s-dot"></div>
+      <span class="s-label" id="statusLabel">IDLE</span>
+    </div>
+
+    <div class="topbar-right">
+      <div class="lang-pair">
+        <span class="lang">EN</span>
+        <span class="lang-arr">→</span>
+        <span class="lang">PT</span>
+      </div>
+      <button class="icon-btn" title="Settings">⚙</button>
+      <button class="icon-btn" title="Minimize">—</button>
+    </div>
+  </header>
+
+  <!-- ═══ MAIN ═══ -->
+  <main class="content">
+
+    <!-- LEFT SIDEBAR -->
+    <aside class="sidebar-l">
+
+      <!-- START/STOP -->
+      <div class="ctrl-block">
+        <button class="btn-start" id="startBtn">
+          <span class="bi" id="startIco">▶</span>
+          <span class="bl" id="startLbl">START</span>
+        </button>
+      </div>
+
+      <!-- REGION -->
+      <div class="ctrl-block">
+        <p class="blk-title">CAPTURE REGION</p>
+        <select id="monitorSel" class="monitor-sel" style="display:none"></select>
+        <div class="region-box">
+          <div class="coord-grid">
+            <div class="coord-row"><span class="coord-k">X</span><span class="coord-v" id="rX">0</span></div>
+            <div class="coord-row"><span class="coord-k">Y</span><span class="coord-v" id="rY">0</span></div>
+            <div class="coord-row"><span class="coord-k">W</span><span class="coord-v" id="rW">1280</span></div>
+            <div class="coord-row"><span class="coord-k">H</span><span class="coord-v" id="rH">720</span></div>
+          </div>
+          <button class="btn-sec" id="regionBtn">⊞ SELECT REGION</button>
+        </div>
+      </div>
+
+      <!-- SETTINGS -->
+      <div class="ctrl-block">
+        <p class="blk-title">SETTINGS</p>
+        <div class="toggle-list">
+          <div class="t-row"><span class="t-lbl">CUDA ACCEL</span>    <div class="toggle on" id="tCuda"></div></div>
+          <div class="t-row"><span class="t-lbl">TRANS. CACHE</span>  <div class="toggle on" id="tCache"></div></div>
+          <div class="t-row"><span class="t-lbl">SCROLL DETECT</span> <div class="toggle on" id="tScroll"></div></div>
+          <div class="t-row"><span class="t-lbl">DEBUG OVERLAY</span> <div class="toggle"    id="tDebug"></div></div>
+          <div class="t-row"><span class="t-lbl">AUTO TRANSLATE</span><div class="toggle on" id="tAuto"></div></div>
+        </div>
+      </div>
+
+      <!-- DEBOUNCE -->
+      <div class="ctrl-block">
+        <p class="blk-title">SCROLL DEBOUNCE</p>
+        <div class="slider-row">
+          <input type="range" min="100" max="1000" value="300" id="dbSlider">
+          <span class="slider-val" id="dbVal">300ms</span>
+        </div>
+      </div>
+
+      <!-- PIPELINE -->
+      <div class="ctrl-block" style="flex:1">
+        <p class="blk-title">PIPELINE</p>
+        <div class="pipeline" id="pipeline">
+          <div class="pipe-step" data-s="capture">CAPTURE</div>
+          <div class="pipe-join"></div>
+          <div class="pipe-step" data-s="motion">MOTION DETECT</div>
+          <div class="pipe-join"></div>
+          <div class="pipe-step" data-s="bubble">BUBBLE DET.</div>
+          <div class="pipe-join"></div>
+          <div class="pipe-step" data-s="ocr">PaddleOCR</div>
+          <div class="pipe-join"></div>
+          <div class="pipe-step" data-s="translate">TRANSLATE</div>
+          <div class="pipe-join"></div>
+          <div class="pipe-step" data-s="overlay">OVERLAY</div>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- CAPTURE AREA -->
+    <section class="capture-area">
+      <div class="cap-header">
+        <span class="cap-title">CAPTURE PREVIEW</span>
+        <span class="fps-disp" id="fpsDsp">— FPS</span>
+        <div class="live-tag" id="liveTag">● LIVE</div>
+      </div>
+
+      <div class="cap-viewport" id="viewport">
+        <div class="corner tl"></div>
+        <div class="corner tr"></div>
+        <div class="corner bl"></div>
+        <div class="corner br"></div>
+
+        <div id="mangaSim"></div>
+        <div class="scan-line" id="scanLine"></div>
+        <div id="debounceBar"></div>
+
+        <div class="idle-state" id="idleState">
+          <div class="idle-ico">
+            <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+              <rect x="4" y="8"  width="28" height="20" rx="2" stroke="currentColor" stroke-width="1.5"/>
+              <line x1="10" y1="14" x2="26" y2="14" stroke="currentColor" stroke-width="1.5"/>
+              <line x1="10" y1="18" x2="22" y2="18" stroke="currentColor" stroke-width="1.5"/>
+              <line x1="10" y1="22" x2="24" y2="22" stroke="currentColor" stroke-width="1.5"/>
+              <circle cx="18" cy="31" r="1.5" fill="currentColor"/>
+            </svg>
+          </div>
+          <p class="idle-txt">Press START to begin scanning<br><span style="font-size:9px;opacity:.5">Select a capture region first</span></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT SIDEBAR — LOG -->
+    <aside class="sidebar-r">
+      <div class="log-header">
+        <span class="log-title">TRANSLATIONS</span>
+        <button class="btn-clr" id="clearBtn">CLEAR</button>
+        <span class="log-n" id="logN">0</span>
+      </div>
+      <div class="log-scroll" id="logScroll">
+        <div class="log-empty" id="logEmpty">
+          <p>No translations yet.</p>
+          <p style="opacity:.5">Start scanning to see results.</p>
+        </div>
+      </div>
+    </aside>
+
+  </main>
+
+  <!-- ═══ STATS BAR ═══ -->
+  <footer class="statsbar">
+    <div class="stat">
+      <span class="stat-lbl">BUBBLES</span>
+      <span class="stat-val" id="sBubbles">0</span>
+    </div>
+    <div class="sdiv"></div>
+    <div class="stat">
+      <span class="stat-lbl">TRANSLATED</span>
+      <span class="stat-val" id="sTranslated">0</span>
+    </div>
+    <div class="sdiv"></div>
+    <div class="stat">
+      <span class="stat-lbl">CACHED</span>
+      <span class="stat-val" id="sCached">0</span>
+    </div>
+    <div class="sdiv"></div>
+    <div class="stat">
+      <span class="stat-lbl">API CALLS</span>
+      <span class="stat-val" id="sApi">0</span>
+    </div>
+    <div class="sdiv"></div>
+    <div class="stat">
+      <span class="stat-lbl">FPS</span>
+      <span class="stat-val" id="sFps">—</span>
+    </div>
+    <div class="stats-right">
+      <span class="engine-tag">PaddleOCR</span>
+      <span class="engine-tag">YOLOv8n</span>
+      <span class="engine-tag">DeepL</span>
+    </div>
+  </footer>
+
+</div><!-- .app -->
+
+<script>
+// ── DATA ──────────────────────────────────────────────────────────────────────
+const TRANS = [
+  { en: "I'll protect you!", pt: "Vou te proteger!", conf: 0.97 },
+  { en: "What are you doing here?", pt: "O que você está fazendo aqui?", conf: 0.93 },
+  { en: "This can't be happening...", pt: "Isso não pode estar acontecendo...", conf: 0.90 },
+  { en: "You're the one who betrayed me!", pt: "Você foi quem me traiu!", conf: 0.98 },
+  { en: "Don't underestimate me!", pt: "Não me subestime!", conf: 0.99 },
+  { en: "I've been waiting for this moment.", pt: "Estava esperando por esse momento.", conf: 0.94 },
+  { en: "Run!", pt: "Corra!", conf: 0.99 },
+  { en: "We have to move now.", pt: "Temos que nos mover agora.", conf: 0.95 },
+  { en: "Your power... it's incredible.", pt: "Seu poder... é incrível.", conf: 0.91 },
+  { en: "I won't let anyone hurt you.", pt: "Não deixarei ninguém te machucar.", conf: 0.96 },
+  { en: "This fight isn't over yet.", pt: "Essa luta ainda não acabou.", conf: 0.93 },
+  { en: "Why did you come back?", pt: "Por que você voltou?", conf: 0.97 },
+  { en: "Trust me.", pt: "Confie em mim.", conf: 0.99 },
+  { en: "There's no time!", pt: "Não há tempo!", conf: 0.98 },
+  { en: "Stay back!", pt: "Fique para trás!", conf: 0.96 },
+];
+
+const ACTION_WORDS = ['ZAP!', 'POW!', 'SCAN!', 'OCR!', 'FOUND!', 'HIT!'];
+
+// Simulated manga panels (relative %)
+const PANELS = [
+  { top:'2%',  left:'2%',  w:'56%', h:'55%',
+    bubbles: [{ top:'12%', left:'52%', w:'42%', h:'26%', ti: 0 }] },
+  { top:'2%',  left:'59%', w:'39%', h:'28%',
+    bubbles: [{ top:'22%', left:'8%',  w:'84%', h:'55%', ti: 1 }] },
+  { top:'31%', left:'59%', w:'39%', h:'26%',
+    bubbles: [] },
+  { top:'58%', left:'2%',  w:'44%', h:'40%',
+    bubbles: [{ top:'18%', left:'8%',  w:'74%', h:'36%', ti: 4 }] },
+  { top:'58%', left:'47%', w:'51%', h:'40%',
+    bubbles: [{ top:'15%', left:'12%', w:'70%', h:'34%', ti: 6 }] },
+];
+
+// ── BRIDGE (preenchido pelo QWebChannel quando rodando dentro do Qt) ──────────
+let BE = null;
+
+// ── STATE ─────────────────────────────────────────────────────────────────────
+const S = { running:false, bubbles:0, translated:0, cached:0, api:0, entries:0, tidx:0 };
+let dboxEls = [], simLoop = null;
+
+// ── ELEMENTS ──────────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const startBtn   = $('startBtn');
+const startIco   = $('startIco');
+const startLbl   = $('startLbl');
+const statusPill = $('statusPill');
+const statusLabel= $('statusLabel');
+const liveTag    = $('liveTag');
+const scanLine   = $('scanLine');
+const idleState  = $('idleState');
+const mangaSim   = $('mangaSim');
+const fpsDsp     = $('fpsDsp');
+const logScroll  = $('logScroll');
+const logEmpty   = $('logEmpty');
+const logN       = $('logN');
+const actionWord = $('actionWord');
+const debounceBar= $('debounceBar');
+const viewport   = $('viewport');
+const pipeline   = $('pipeline');
+
+// ── PIPELINE ──────────────────────────────────────────────────────────────────
+const pSteps = pipeline.querySelectorAll('.pipe-step');
+const pJoins = pipeline.querySelectorAll('.pipe-join');
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function runPipeline() {
+  for (let i = 0; i < pSteps.length; i++) {
+    pSteps.forEach((s, si) => { s.classList.toggle('active', si===i); s.classList.toggle('done', si<i); });
+    pJoins.forEach((j, ji) => {
+      j.classList.toggle('lit', ji < i);
+      j.classList.toggle('act', ji === i - 1);
+    });
+    if (!S.running) return;
+    await sleep(280 + Math.random() * 180);
+  }
+  pSteps.forEach(s => { s.classList.remove('active'); s.classList.add('done'); });
+  pJoins.forEach(j => { j.classList.add('lit'); j.classList.remove('act'); });
+}
+
+function resetPipeline() {
+  pSteps.forEach(s => s.classList.remove('active','done'));
+  pJoins.forEach(j => j.classList.remove('lit','act'));
+}
+
+// ── MANGA SIM ────────────────────────────────────────────────────────────────
+function buildSim() {
+  mangaSim.innerHTML = '';
+  PANELS.forEach((p, pi) => {
+    const div = document.createElement('div');
+    div.style.cssText = `position:absolute;top:${p.top};left:${p.left};width:${p.w};height:${p.h};background:#161616;border:1px solid #282828;overflow:hidden;`;
+
+    // halftone
+    const ht = document.createElement('div');
+    ht.style.cssText = 'position:absolute;inset:0;background-image:radial-gradient(circle,#222 1px,transparent 1px);background-size:6px 6px;opacity:.45;';
+    div.appendChild(ht);
+
+    // silhouette for large panels
+    if (pi === 0) {
+      div.innerHTML += `<svg style="position:absolute;bottom:0;left:18%;width:55%;height:85%;opacity:.12;" viewBox="0 0 100 140"><ellipse cx="50" cy="28" rx="18" ry="20" fill="#fff"/><rect x="28" y="53" width="44" height="87" rx="5" fill="#fff"/><rect x="12" y="57" width="16" height="58" rx="4" fill="#fff"/><rect x="72" y="57" width="16" height="58" rx="4" fill="#fff"/></svg>`;
+    } else if (pi === 3) {
+      div.innerHTML += `<svg style="position:absolute;bottom:0;right:8%;width:42%;height:90%;opacity:.10;" viewBox="0 0 100 140"><ellipse cx="50" cy="24" rx="16" ry="18" fill="#fff"/><rect x="30" y="46" width="40" height="94" rx="5" fill="#fff"/><rect x="14" y="50" width="16" height="62" rx="4" fill="#fff"/><rect x="70" y="50" width="16" height="62" rx="4" fill="#fff"/></svg>`;
+    }
+
+    // speech bubbles
+    p.bubbles.forEach(b => {
+      const bel = document.createElement('div');
+      bel.style.cssText = `position:absolute;top:${b.top};left:${b.left};width:${b.w};height:${b.h};background:white;border:1.5px solid #111;border-radius:40%;display:flex;align-items:center;justify-content:center;text-align:center;padding:6px;font-family:'IBM Plex Mono',monospace;font-size:8px;color:#111;line-height:1.35;font-style:italic;`;
+      bel.textContent = TRANS[b.ti].en;
+      div.appendChild(bel);
+    });
+
+    mangaSim.appendChild(div);
+  });
+}
+
+// ── DETECTION BOXES ──────────────────────────────────────────────────────────
+const DBOX_POSITIONS = [
+  { top:'10%', left:'33%', w:'24%', h:'17%', conf:'97%', ti:0 },
+  { top:'26%', left:'60%', w:'32%', h:'19%', conf:'93%', ti:1 },
+  { top:'60%', left:'4%',  w:'27%', h:'19%', conf:'99%', ti:4 },
+  { top:'60%', left:'60%', w:'26%', h:'16%', conf:'95%', ti:6 },
+];
+
+function addDetectBoxes(showTrans) {
+  dboxEls.forEach(e => e.remove());
+  dboxEls = [];
+
+  DBOX_POSITIONS.forEach(p => {
+    const box = document.createElement('div');
+    box.className = 'dbox';
+    box.style.cssText = `top:${p.top};left:${p.left};width:${p.w};height:${p.h};`;
+
+    const lbl = document.createElement('div');
+    lbl.className = 'dbox-label';
+    lbl.textContent = `BUBBLE · ${p.conf}`;
+    box.appendChild(lbl);
+
+    if (showTrans) {
+      const ov = document.createElement('div');
+      ov.className = 'trans-overlay';
+      ov.textContent = TRANS[p.ti].pt;
+      box.appendChild(ov);
+    } else {
+      const conf = document.createElement('div');
+      conf.className = 'dbox-conf';
+      conf.textContent = p.conf;
+      box.appendChild(conf);
+    }
+
+    viewport.appendChild(box);
+    dboxEls.push(box);
+  });
+}
+
+// ── LOG ENTRIES ──────────────────────────────────────────────────────────────
+function addEntry(t, cached) {
+  S.entries++;
+  logN.textContent = S.entries;
+  if (logEmpty.parentNode === logScroll) logScroll.removeChild(logEmpty);
+
+  const el = document.createElement('div');
+  el.className = `t-entry${cached ? ' cached' : ''}`;
+  el.innerHTML = `
+    <div class="e-meta">
+      <span class="e-num">#${String(S.entries).padStart(3,'0')}</span>
+      <span class="e-badge ${cached ? 'badge-c' : 'badge-t'}">${cached ? 'CACHED' : 'TRANSLATED'}</span>
+    </div>
+    <div class="e-en">${t.en}</div>
+    <div class="e-arr">↓</div>
+    <div class="e-pt">${t.pt}</div>
+    <div class="e-conf">
+      <span class="e-conf-lbl">CONF: ${(t.conf*100).toFixed(0)}%</span>
+      <div class="conf-bar"><div class="conf-fill" style="width:0%"></div></div>
+    </div>
+  `;
+  logScroll.insertBefore(el, logScroll.firstChild);
+  requestAnimationFrame(() => el.querySelector('.conf-fill').style.width = (t.conf*100)+'%');
+  while (logScroll.children.length > 60) logScroll.removeChild(logScroll.lastChild);
+}
+
+// ── ACTION POPUP ──────────────────────────────────────────────────────────────
+function popAction(word) {
+  actionWord.textContent = word;
+  actionWord.classList.remove('pop');
+  void actionWord.offsetWidth;
+  actionWord.classList.add('pop');
+  setTimeout(() => actionWord.classList.remove('pop'), 700);
+}
+
+// ── STATUS UPDATE ─────────────────────────────────────────────────────────────
+function setStatus(label, cls) {
+  statusPill.className = 'status-pill ' + cls;
+  statusLabel.textContent = label;
+}
+
+// ── MAIN SIM LOOP ────────────────────────────────────────────────────────────
+async function simRun() {
+  let fpsCnt = 0, lastT = Date.now();
+  let phase = 0; // 0=scan, 1=translate
+
+  while (S.running) {
+    // FPS counter
+    fpsCnt++;
+    const now = Date.now();
+    if (now - lastT > 1000) {
+      const fps = Math.round(fpsCnt * 1000 / (now - lastT));
+      fpsDsp.textContent = `${fps} FPS`;
+      $('sFps').textContent = fps;
+      fpsCnt = 0; lastT = now;
+    }
+
+    // Bubbles stat
+    const nb = 3 + Math.floor(Math.random() * 3);
+    S.bubbles += nb;
+    $('sBubbles').textContent = S.bubbles;
+
+    // Status: scanning
+    setStatus('SCANNING', 'is-scanning');
+
+    // Show scan boxes (no translation yet)
+    addDetectBoxes(false);
+
+    // Run pipeline
+    await runPipeline();
+    if (!S.running) break;
+
+    // Debounce bar flash
+    debounceBar.style.width = '0%';
+    const dbMs = parseInt($('dbSlider').value);
+    const steps = 20;
+    for (let i = 0; i <= steps; i++) {
+      debounceBar.style.width = (i / steps * 100) + '%';
+      await sleep(dbMs / steps);
+    }
+    debounceBar.style.width = '0%';
+
+    if (!S.running) break;
+
+    // Translation phase
+    setStatus('TRANSLATING', 'is-scanning');
+    addDetectBoxes(true);
+
+    const t = TRANS[S.tidx % TRANS.length];
+    S.tidx++;
+    const isCached = Math.random() < 0.28;
+
+    if (isCached) { S.cached++; $('sCached').textContent = S.cached; }
+    else          { S.api++;    $('sApi').textContent = S.api; }
+    S.translated++;
+    $('sTranslated').textContent = S.translated;
+
+    addEntry(t, isCached);
+
+    if (Math.random() < 0.35) popAction(ACTION_WORDS[Math.floor(Math.random() * ACTION_WORDS.length)]);
+
+    setStatus('ACTIVE', 'is-active');
+    await sleep(1800 + Math.random() * 1800);
+  }
+}
+
+// ── START / STOP ──────────────────────────────────────────────────────────────
+function startScan() {
+  S.running = true;
+  startBtn.classList.add('stop');
+  startIco.textContent = '■';
+  startLbl.textContent = 'STOP';
+  setStatus('ACTIVE', 'is-active');
+  liveTag.classList.add('on');
+  idleState.classList.add('out');
+  scanLine.classList.add('on');
+  buildSim();
+  mangaSim.classList.add('vis');
+  addDetectBoxes(false);
+  popAction('START!');
+  if (!BE) simRun();   // simulação só quando não há backend Python
+}
+
+function stopScan() {
+  S.running = false;
+  startBtn.classList.remove('stop');
+  startIco.textContent = '▶';
+  startLbl.textContent = 'START';
+  setStatus('IDLE', '');
+  liveTag.classList.remove('on');
+  idleState.classList.remove('out');
+  scanLine.classList.remove('on');
+  mangaSim.classList.remove('vis');
+  fpsDsp.textContent = '— FPS';
+  $('sFps').textContent = '—';
+  dboxEls.forEach(e => e.remove()); dboxEls = [];
+  resetPipeline();
+}
+
+startBtn.addEventListener('click', () => {
+  if (S.running) { stopScan();  if (BE) BE.stop(); }
+  else           { startScan(); if (BE) BE.start(); }
+});
+
+// ── TOGGLES ───────────────────────────────────────────────────────────────────
+document.querySelectorAll('.toggle').forEach(t => t.addEventListener('click', () => t.classList.toggle('on')));
+
+// ── DEBOUNCE SLIDER ───────────────────────────────────────────────────────────
+$('dbSlider').addEventListener('input', function() { $('dbVal').textContent = this.value + 'ms'; });
+
+// ── CLEAR ─────────────────────────────────────────────────────────────────────
+$('clearBtn').addEventListener('click', () => {
+  S.entries = 0; logN.textContent = '0';
+  logScroll.innerHTML = ''; logScroll.appendChild(logEmpty);
+});
+
+// ── REGION SELECTOR ───────────────────────────────────────────────────────────
+$('regionBtn').addEventListener('click', () => {
+  if (BE) {
+    BE.selectRegion();   // abre seletor nativo PyQt6
+  } else {
+    // simulação no browser
+    $('rX').textContent = Math.floor(Math.random() * 200);
+    $('rY').textContent = Math.floor(Math.random() * 100);
+    $('rW').textContent = 800 + Math.floor(Math.random() * 480);
+    $('rH').textContent = 600 + Math.floor(Math.random() * 360);
+  }
+});
+
+// ── QWEBCHANNEL — conecta ao backend Python quando rodando dentro do Qt ────────
+window.addEventListener('load', function () {
+  // qt.webChannelTransport é injetado automaticamente pelo Qt quando
+  // QWebChannel está configurado. Ausente no browser normal.
+  if (typeof qt === 'undefined') return;
+
+  new QWebChannel(qt.webChannelTransport, function (channel) {
+    BE = channel.objects.backend;
+
+    // status vindo do Python → atualiza só o texto (classe CSS fica pelo JS)
+    BE.statusChanged.connect(function (text) {
+      statusLabel.textContent = text;
+    });
+
+    // coordenadas da região selecionada no PyQt6
+    BE.regionChanged.connect(function (x, y, w, h) {
+      $('rX').textContent = x;
+      $('rY').textContent = y;
+      $('rW').textContent = w;
+      $('rH').textContent = h;
+    });
+
+    // tradução individual → adiciona ao log
+    BE.translationAdded.connect(function (json) {
+      const t = JSON.parse(json);
+      S.translated++;
+      $('sTranslated').textContent = S.translated;
+      if (t.cached) { S.cached++; $('sCached').textContent = S.cached; }
+      else          { S.api++;    $('sApi').textContent = S.api; }
+      addEntry({ en: t.en, pt: t.pt, conf: 0.95 }, t.cached);
+      popAction(ACTION_WORDS[Math.floor(Math.random() * ACTION_WORDS.length)]);
+    });
+
+    // OCR iniciou → anima pipeline
+    BE.processingStarted.connect(function () {
+      S.bubbles++;
+      $('sBubbles').textContent = S.bubbles;
+      setStatus('SCANNING', 'is-scanning');
+      resetPipeline();
+      runPipeline();   // animação one-shot (não loop)
+    });
+
+    // pipeline concluído → marca tudo verde
+    BE.pipelineDone.connect(function () {
+      pSteps.forEach(s => { s.classList.remove('active'); s.classList.add('done'); });
+      pJoins.forEach(j => { j.classList.add('lit'); j.classList.remove('act'); });
+      setStatus('ACTIVE', 'is-active');
+    });
+
+    // popula seletor de monitor (oculto em monitor único)
+    BE.getMonitors(function (json) {
+      const monitors = JSON.parse(json);
+      if (monitors.length <= 1) return;
+      const sel = $('monitorSel');
+      monitors.forEach(function (m) {
+        const opt = document.createElement('option');
+        opt.value = m.index;
+        opt.textContent = m.label + (m.primary ? ' ★' : '');
+        sel.appendChild(opt);
+      });
+      sel.style.display = '';
+      sel.addEventListener('change', function () {
+        BE.setMonitor(parseInt(sel.value, 10));
+      });
+    });
+  });
+});
+
+// Initial sim build (invisible)
+buildSim();
+</script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+# Captura de tela
+mss
+
+# Processamento de imagem
+opencv-python
+numpy
+
+# OCR
+rapidocr-onnxruntime
+
+# Detecção de balões (YOLOv8)
+# torch é instalado pelo ultralytics. Para GPU NVIDIA, substitua por:
+#   pip install torch==2.12.0+cu126 --index-url https://download.pytorch.org/whl/cu126
+ultralytics
+
+# Tradução
+deep-translator
+
+# Overlay / GUI
+PyQt6
+PyQt6-WebEngine
+
+# Utilitários
+Pillow
+huggingface_hub
