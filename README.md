@@ -16,7 +16,10 @@ Captura uma região da tela, detecta balões de fala, extrai o texto em inglês 
 - **Detecção de balões** — YOLOv8 (`ogkalu/comic-speech-bubble-detector-yolov8m`, ~52 MB, download automático via `huggingface_hub`); fallback para detector OpenCV com `adaptiveThreshold` + `connectedComponents`
 - **OCR** — `rapidocr-onnxruntime` (~0,35 s/balão, sem dependência de Tesseract); paralelo por balão com `ThreadPoolExecutor`
 - **Pré-processamento** — upscale, MIN(R,G,B), CLAHE, unsharp mask; inversão automática para texto branco em fundo escuro
-- **Tradução EN → PT-BR** — Google Translate via `deep-translator`; cache persistido em disco (`.translation_cache.json`), chamada de API apenas na primeira ocorrência de cada texto
+- **Tradução EN → PT-BR** — dois engines configuráveis pelo dashboard:
+  - **Google Translate** (padrão) — via `deep-translator`, sem instalação extra
+  - **Ollama** (opcional) — LLM local com janela de contexto de 15 falas; corrige erros de OCR por inferência; fallback automático para Google se o modelo mantiver o inglês
+- **Cache de tradução** — persistido em disco (`.translation_cache.json`), hash MD5; chamada de engine apenas na primeira ocorrência de cada texto
 - **Overlay transparente** — janela PyQt6 click-through sempre no topo; fundo reescrito com cor amostrada dos cantos do balão (estilo scanlation); fonte proporcional à altura do balão
 - **Suporte a GPU** — YOLOv8 usa CUDA automaticamente se disponível
 
@@ -33,7 +36,7 @@ ocr-webtoon/
 │   ├── motion_detector.py # diff de frames para detectar scroll
 │   ├── bubble_detector.py # YOLOv8 + fallback OpenCV
 │   ├── ocr_engine.py      # RapidOCR com pré-processamento
-│   ├── translator.py      # Google Translate + cache em disco
+│   ├── translator.py      # Google Translate + Ollama LLM + cache em disco
 │   ├── cache.py           # TranslationCache (MD5, persistência JSON, thread-safe)
 │   └── overlay.py         # OverlayWindow transparente click-through
 └── ui/
@@ -58,6 +61,19 @@ python -m screen_capture.main
 
 Na primeira execução, o modelo YOLOv8 (~52 MB) é baixado automaticamente do HuggingFace e armazenado em cache local.
 
+### Tradução com Ollama (opcional)
+
+```powershell
+# Instalar pacote Python
+pip install ollama
+
+# Baixar um modelo (recomendado: qwen2.5:7b para melhor qualidade)
+ollama pull qwen2.5:3b   # ~2 GB, mais rápido
+ollama pull qwen2.5:7b   # ~4.7 GB, melhor qualidade
+```
+
+No dashboard: **Settings → TRANS ENGINE → OLLAMA**, configure o nome do modelo e clique em **TEST** para verificar a conexão. O botão **⌫ CLEAR CONTEXT** limpa o histórico de diálogo — útil ao trocar de capítulo.
+
 ---
 
 ## Stack
@@ -68,7 +84,8 @@ Na primeira execução, o modelo YOLOv8 (~52 MB) é baixado automaticamente do H
 | Processamento de imagem | `opencv-python`, `numpy` |
 | Detecção de balões | `ultralytics` (YOLOv8), fallback OpenCV |
 | OCR | `rapidocr-onnxruntime` |
-| Tradução | `deep-translator` (Google Translate) |
+| Tradução (padrão) | `deep-translator` (Google Translate) |
+| Tradução (LLM) | `ollama` (opcional) |
 | Cache | JSON em disco, hash MD5 |
 | Overlay / GUI | `PyQt6` |
 | Dashboard | `PyQt6-WebEngine`, `QWebChannel`, HTML/CSS/JS |
@@ -78,6 +95,5 @@ Na primeira execução, o modelo YOLOv8 (~52 MB) é baixado automaticamente do H
 
 ## Melhorias futuras
 
-- Tradução contextual via LLM (preservar gírias, nomes próprios, tom narrativo)
 - Reescrita completa do balão: remover texto original, redesenhar fundo, inserir tradução estilizada (scanlation-style)
 - Validação com fontes muito decorativas (manuscritas, com sombra)
