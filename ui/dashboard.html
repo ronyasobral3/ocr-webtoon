@@ -225,6 +225,28 @@
     .toggle.on { border-color: var(--y); background: rgba(255,229,0,0.08); }
     .toggle.on::after { background: var(--y); left: 20px; box-shadow: 0 0 6px rgba(255,229,0,0.5); }
 
+    /* OLLAMA CONFIG */
+    .ollama-cfg { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+    .ollama-row { display: flex; gap: 5px; align-items: center; }
+    .ollama-input {
+      flex: 1; padding: 4px 7px;
+      background: var(--bg); border: 1px solid var(--border);
+      color: var(--text); font-family: var(--fm); font-size: 9px;
+      letter-spacing: 0.05em; outline: none;
+    }
+    .ollama-input:focus { border-color: var(--y); }
+    .btn-test {
+      padding: 4px 8px; white-space: nowrap;
+      background: none; border: 1px solid var(--border); color: var(--muted);
+      font-family: var(--fm); font-size: 8px; letter-spacing: 0.15em;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .btn-test:hover { border-color: var(--c); color: var(--c); }
+    .btn-test.testing { border-color: var(--c); color: var(--c); animation: blink 0.6s ease-in-out infinite; }
+    .ollama-status { font-family: var(--fm); font-size: 9px; color: var(--muted); letter-spacing: 0.06em; line-height: 1.5; min-height: 14px; }
+    .ollama-status.ok  { color: var(--g); }
+    .ollama-status.err { color: var(--r); }
+
     /* DEBOUNCE SLIDER */
     .slider-row { display: flex; align-items: center; gap: 10px; }
     input[type=range] { flex: 1; accent-color: var(--y); height: 2px; }
@@ -418,6 +440,8 @@
     .e-badge { font-family: var(--fm); font-size: 7px; letter-spacing: 0.15em; padding: 1px 6px; }
     .badge-t { border: 1px solid var(--y); color: var(--y); background: rgba(255,229,0,0.04); }
     .badge-c { border: 1px solid var(--c); color: var(--c); background: rgba(0,212,255,0.04); }
+    .badge-o { border: 1px solid var(--g); color: var(--g); background: rgba(57,255,20,0.04); }
+    .e-engine { font-family: var(--fm); font-size: 7px; letter-spacing: 0.12em; color: var(--dim); }
 
     .e-en { font-family: var(--fm); font-size: 10px; color: var(--muted); line-height: 1.5; margin-bottom: 5px; font-style: italic; }
     .e-arr { font-size: 9px; color: var(--dim); margin-bottom: 4px; }
@@ -544,6 +568,27 @@
           <div class="t-row"><span class="t-lbl">DEBUG OVERLAY</span> <div class="toggle"    id="tDebug"></div></div>
           <div class="t-row"><span class="t-lbl">AUTO TRANSLATE</span><div class="toggle on" id="tAuto"></div></div>
         </div>
+
+        <!-- TRANSLATION ENGINE -->
+        <div class="t-row" style="margin-top:10px">
+          <span class="t-lbl">TRANS ENGINE</span>
+          <select id="engineSel" class="monitor-sel" style="width:auto;padding:3px 7px;font-size:9px">
+            <option value="google">GOOGLE</option>
+            <option value="ollama">OLLAMA</option>
+          </select>
+        </div>
+
+        <!-- Ollama config (visível apenas quando OLLAMA selecionado) -->
+        <div id="ollamaConfig" class="ollama-cfg" style="display:none">
+          <div class="ollama-row">
+            <input id="ollamaModel" class="ollama-input" value="qwen2.5:3b" placeholder="model name">
+            <button id="testOllamaBtn" class="btn-test">TEST</button>
+          </div>
+          <div class="ollama-row">
+            <button id="clearCtxBtn" class="btn-test" style="width:100%;border-color:var(--r);color:var(--r)">⌫ CLEAR CONTEXT</button>
+          </div>
+          <div id="ollamaStatus" class="ollama-status"></div>
+        </div>
       </div>
 
       <!-- DEBOUNCE -->
@@ -652,9 +697,9 @@
       <span class="stat-val" id="sFps">—</span>
     </div>
     <div class="stats-right">
-      <span class="engine-tag">PaddleOCR</span>
-      <span class="engine-tag">YOLOv8n</span>
-      <span class="engine-tag">DeepL</span>
+      <span class="engine-tag">RapidOCR</span>
+      <span class="engine-tag">YOLOv8</span>
+      <span class="engine-tag" id="transEngineTag">GOOGLE</span>
     </div>
   </footer>
 
@@ -824,12 +869,20 @@ function addEntry(t, cached) {
   logN.textContent = S.entries;
   if (logEmpty.parentNode === logScroll) logScroll.removeChild(logEmpty);
 
+  const isOllama = !cached && t.engine === 'ollama';
+  const badgeCls = cached ? 'badge-c' : (isOllama ? 'badge-o' : 'badge-t');
+  const badgeTxt = cached ? 'CACHED' : (isOllama ? 'OLLAMA' : 'GOOGLE');
+  const engineHint = !cached
+    ? `<span class="e-engine">${isOllama ? '🧠 LLM · ctx-aware' : '🌐 Google Translate'}</span>`
+    : '';
+
   const el = document.createElement('div');
   el.className = `t-entry${cached ? ' cached' : ''}`;
   el.innerHTML = `
     <div class="e-meta">
       <span class="e-num">#${String(S.entries).padStart(3,'0')}</span>
-      <span class="e-badge ${cached ? 'badge-c' : 'badge-t'}">${cached ? 'CACHED' : 'TRANSLATED'}</span>
+      <span class="e-badge ${badgeCls}">${badgeTxt}</span>
+      ${engineHint}
     </div>
     <div class="e-en">${t.en}</div>
     <div class="e-arr">↓</div>
@@ -987,6 +1040,54 @@ $('regionBtn').addEventListener('click', () => {
   }
 });
 
+// ── TRANSLATION ENGINE ────────────────────────────────────────────────────────
+$('engineSel').addEventListener('change', function () {
+  const backend = this.value;
+  $('ollamaConfig').style.display = backend === 'ollama' ? '' : 'none';
+  $('transEngineTag').textContent = backend === 'ollama'
+    ? ($('ollamaModel').value.trim() || 'OLLAMA')
+    : 'GOOGLE';
+  if (BE) BE.setTranslationBackend(backend);
+});
+
+$('ollamaModel').addEventListener('change', function () {
+  const model = this.value.trim();
+  if (model) {
+    $('transEngineTag').textContent = model;
+    if (BE) BE.setOllamaModel(model);
+  }
+});
+
+$('clearCtxBtn').addEventListener('click', function () {
+  const statusEl = $('ollamaStatus');
+  if (BE) {
+    BE.clearOllamaContext();
+    statusEl.textContent = 'Contexto limpo.';
+    statusEl.className = 'ollama-status ok';
+    setTimeout(() => { statusEl.textContent = ''; statusEl.className = 'ollama-status'; }, 2000);
+  } else {
+    statusEl.textContent = 'Disponível apenas dentro do app.';
+    statusEl.className = 'ollama-status';
+  }
+});
+
+$('testOllamaBtn').addEventListener('click', function () {
+  const statusEl = $('ollamaStatus');
+  statusEl.textContent = 'Connecting…';
+  statusEl.className = 'ollama-status';
+  $('testOllamaBtn').classList.add('testing');
+
+  const model = $('ollamaModel').value.trim();
+  if (BE) {
+    if (model) BE.setOllamaModel(model);
+    BE.testOllama();
+  } else {
+    $('testOllamaBtn').classList.remove('testing');
+    statusEl.textContent = 'Disponível apenas dentro do app.';
+    statusEl.className = 'ollama-status';
+  }
+});
+
 // ── QWEBCHANNEL — conecta ao backend Python quando rodando dentro do Qt ────────
 window.addEventListener('load', function () {
   // qt.webChannelTransport é injetado automaticamente pelo Qt quando
@@ -1016,7 +1117,7 @@ window.addEventListener('load', function () {
       $('sTranslated').textContent = S.translated;
       if (t.cached) { S.cached++; $('sCached').textContent = S.cached; }
       else          { S.api++;    $('sApi').textContent = S.api; }
-      addEntry({ en: t.en, pt: t.pt, conf: 0.95 }, t.cached);
+      addEntry({ en: t.en, pt: t.pt, conf: 0.95, engine: t.engine || 'google' }, t.cached);
       popAction(ACTION_WORDS[Math.floor(Math.random() * ACTION_WORDS.length)]);
     });
 
@@ -1034,6 +1135,14 @@ window.addEventListener('load', function () {
       pSteps.forEach(s => { s.classList.remove('active'); s.classList.add('done'); });
       pJoins.forEach(j => { j.classList.add('lit'); j.classList.remove('act'); });
       setStatus('ACTIVE', 'is-active');
+    });
+
+    // resultado do teste de conexão com Ollama
+    BE.ollamaTestResult.connect(function (ok, msg) {
+      const statusEl = $('ollamaStatus');
+      $('testOllamaBtn').classList.remove('testing');
+      statusEl.textContent = msg;
+      statusEl.className = 'ollama-status ' + (ok ? 'ok' : 'err');
     });
 
     // popula seletor de monitor (oculto em monitor único)

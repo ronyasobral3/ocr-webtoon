@@ -15,6 +15,8 @@ ultralytics
 
 # Tradução
 deep-translator
+# Tradução contextual via Ollama (opcional — só necessário se usar engine OLLAMA no dashboard)
+# pip install ollama   ← instale separadamente; requer Ollama rodando em localhost:11434
 
 # Overlay / GUI
 PyQt6

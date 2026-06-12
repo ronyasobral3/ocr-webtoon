@@ -35,8 +35,9 @@ class BackendBridge(QObject):
     Exposto ao JavaScript via QWebChannel como `window.backend`.
 
     Sinais Python→JS: statusChanged, translationAdded, processingStarted,
-                      pipelineDone, regionChanged.
-    Slots  JS→Python: start(), stop(), selectRegion(), getMonitors(), setMonitor(i).
+                      pipelineDone, regionChanged, ollamaTestResult.
+    Slots  JS→Python: start(), stop(), selectRegion(), getMonitors(), setMonitor(i),
+                      setTranslationBackend(str), setOllamaModel(str), testOllama().
     """
 
     # Python → JS
@@ -45,13 +46,18 @@ class BackendBridge(QObject):
     processingStarted = pyqtSignal()
     pipelineDone      = pyqtSignal()
     regionChanged     = pyqtSignal(int, int, int, int)  # left, top, w, h
+    ollamaTestResult  = pyqtSignal(bool, str)           # ok, message
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
-        self._start_cb       = None
-        self._stop_cb        = None
-        self._select_cb      = None
-        self._set_monitor_cb = None
+        self._start_cb             = None
+        self._stop_cb              = None
+        self._select_cb            = None
+        self._set_monitor_cb       = None
+        self._set_backend_cb       = None
+        self._set_ollama_model_cb  = None
+        self._test_ollama_cb       = None
+        self._clear_context_cb     = None
 
     # JS → Python
     @pyqtSlot()
@@ -87,6 +93,26 @@ class BackendBridge(QObject):
     def setMonitor(self, index: int) -> None:
         if self._set_monitor_cb:
             self._set_monitor_cb(index)
+
+    @pyqtSlot(str)
+    def setTranslationBackend(self, backend: str) -> None:
+        if self._set_backend_cb:
+            self._set_backend_cb(backend)
+
+    @pyqtSlot(str)
+    def setOllamaModel(self, model: str) -> None:
+        if self._set_ollama_model_cb:
+            self._set_ollama_model_cb(model)
+
+    @pyqtSlot()
+    def testOllama(self) -> None:
+        if self._test_ollama_cb:
+            self._test_ollama_cb()
+
+    @pyqtSlot()
+    def clearOllamaContext(self) -> None:
+        if self._clear_context_cb:
+            self._clear_context_cb()
 
 
 class ControlPanel(QWidget):
@@ -146,6 +172,7 @@ class ControlPanel(QWidget):
                 "en":     det.get("text", ""),
                 "pt":     det.get("translated_text", ""),
                 "cached": det.get("cached", False),
+                "engine": det.get("engine", "google"),
             }))
         self.bridge.pipelineDone.emit()
 

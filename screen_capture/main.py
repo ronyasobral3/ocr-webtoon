@@ -116,6 +116,7 @@ class ProcessingThread(QThread):
                 translated_texts = translator.translate_many(texts)
                 logging.debug("Tradução paralela: %.3fs — %d texto(s)", time.perf_counter() - t_tr, len(texts))
 
+                engine = translator.backend_name
                 detections = []
                 for (box, full_text, bg_color), translated in zip(ocr_results, translated_texts):
                     x1, y1, x2, y2 = box
@@ -124,6 +125,7 @@ class ProcessingThread(QThread):
                         "translated_text": translated,
                         "box": [[x1, y1], [x2, y1], [x2, y2], [x1, y2]],
                         "bg_color": bg_color,
+                        "engine": engine,
                     })
 
                 t_total = time.perf_counter()
@@ -187,6 +189,21 @@ def main() -> None:
             panel.set_status("Monitor desconectado. Selecione uma nova área.")
 
     app.screenRemoved.connect(on_screen_removed)
+
+    def on_set_backend(backend: str) -> None:
+        translator.set_backend(backend)
+
+    def on_set_ollama_model(model: str) -> None:
+        translator.set_ollama_model(model)
+
+    def on_test_ollama() -> None:
+        ok, msg = translator.test_ollama()
+        panel.bridge.ollamaTestResult.emit(ok, msg)
+
+    panel.bridge._set_backend_cb      = on_set_backend
+    panel.bridge._set_ollama_model_cb = on_set_ollama_model
+    panel.bridge._test_ollama_cb      = on_test_ollama
+    panel.bridge._clear_context_cb    = translator.clear_context
 
     panel.start_requested.connect(on_start)
     panel.stop_requested.connect(on_stop)
