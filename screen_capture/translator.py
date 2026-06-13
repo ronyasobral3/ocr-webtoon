@@ -205,6 +205,52 @@ class _OllamaBackend:
             return False, str(exc)
 
 
+# Conjugações "tu" (pres./fut. do subjuntivo) → 3ª pessoa (PT-BR usa "você").
+_PTBR_VERB = {
+    "estás": "está", "estiveste": "esteve", "estiveres": "estiver",
+    "és": "é", "tu": "você",
+    "quiseres": "quiser", "fizeres": "fizer", "tiveres": "tiver",
+    "puderes": "puder", "fores": "for", "deres": "der", "vires": "vir",
+    "souberes": "souber", "disseres": "disser", "vieres": "vier",
+    "houveres": "houver",
+}
+# Léxico europeu → brasileiro (casos frequentes, baixo risco de falso positivo).
+_PTBR_VOCAB = {
+    "rapariga": "garota", "raparigas": "garotas",
+    "comboio": "trem", "comboios": "trens",
+    "autocarro": "ônibus", "telemóvel": "celular",
+    "frigorífico": "geladeira",
+}
+_PTBR_WORD_RE = re.compile(r"[A-Za-zÀ-ÿ]+")
+# "precisar [adv] de <infinitivo>" → remove o "de" (EU "preciso de fazer" /
+# "preciso mais de fazer" → BR "preciso fazer" / "preciso mais fazer"). O grupo
+# do meio preserva advérbios entre o verbo e o "de".
+_PTBR_PRECISAR_DE = re.compile(
+    r"\b(precis\w+)((?:\s+\w+){0,2})\s+de\s+(\w+(?:ar|er|ir))\b", re.IGNORECASE
+)
+
+
+def _to_ptbr(text: str) -> str:
+    """Heurística leve EU-PT → PT-BR sobre a saída do NLLB.
+
+    O NLLB-200 só tem `por_Latn` (genérico), que puxa para o português europeu
+    ("estás", "quiseres", "preciso de fazer"). Esta passada corrige, por
+    substituição whole-word conservadora, os casos mais frequentes — conjugações
+    "tu", léxico e "precisar de + infinitivo". Não cobre tudo, mas aproxima do
+    PT-BR sem arriscar quebrar texto correto."""
+    def _repl(m: "re.Match") -> str:
+        w = m.group(0)
+        rep = _PTBR_VERB.get(w.lower()) or _PTBR_VOCAB.get(w.lower())
+        if rep is None:
+            return w
+        return rep[:1].upper() + rep[1:] if w[:1].isupper() else rep
+
+    out = _PTBR_WORD_RE.sub(_repl, text)
+    # EU "preciso de fazer" → BR "preciso fazer" (só antes de infinitivo).
+    out = _PTBR_PRECISAR_DE.sub(r"\1\2 \3", out)
+    return out
+
+
 class _NLLBBackend:
     """Tradução via NLLB-200 (Meta) — modelo de MT dedicado, fiel e offline.
 
@@ -256,7 +302,8 @@ class _NLLBBackend:
                 gen = self._model.generate(
                     **inputs, forced_bos_token_id=tgt_id, max_length=512, num_beams=4,
                 )
-            return self._tok.batch_decode(gen, skip_special_tokens=True)
+            decoded = self._tok.batch_decode(gen, skip_special_tokens=True)
+            return [_to_ptbr(t) for t in decoded]
         except Exception as exc:
             logging.warning("NLLB falhou (%s), usando Google Translate como fallback", exc)
             return _GoogleBackend("en", "pt").translate_batch(texts, _context)

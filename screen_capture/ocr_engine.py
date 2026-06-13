@@ -68,6 +68,33 @@ def _avg_conf(raw) -> float:
     return sum(float(r[2]) for r in raw) / len(raw) if raw else 0.0
 
 
+def _estimate_shear(binary: np.ndarray) -> float:
+    """Estima o cisalhamento do texto (itálico) maximizando a variância da
+    projeção vertical: glifos itálicos endireitados alinham a tinta de cada
+    coluna → picos mais nítidos. Texto já reto tem ótimo em k≈0, então a
+    estimativa é autolimitada e não distorce o que já está bom.
+
+    `binary` = Otsu (texto=0, fundo=255). Retorna k em [-0.45, 0.45]."""
+    ink = cv2.bitwise_not(binary)  # texto = 255
+    h, w = ink.shape
+    best_k, best_score = 0.0, -1.0
+    for k in np.arange(-0.45, 0.46, 0.075):
+        # Largura fixa (desloca -k*h/2 para centrar) → variâncias comparáveis.
+        M = np.float32([[1, k, -k * h / 2], [0, 1, 0]])
+        sheared = cv2.warpAffine(ink, M, (w, h), flags=cv2.INTER_NEAREST)
+        score = float(sheared.sum(axis=0, dtype=np.float64).var())
+        if score > best_score:
+            best_score, best_k = score, float(k)
+    return best_k
+
+
+def _deskew(gray: np.ndarray, k: float) -> np.ndarray:
+    """Endireita texto itálico aplicando o cisalhamento estimado (fundo claro)."""
+    h, w = gray.shape
+    M = np.float32([[1, k, -k * h / 2], [0, 1, 0]])
+    return cv2.warpAffine(gray, M, (w, h), borderValue=255, flags=cv2.INTER_LINEAR)
+
+
 class OCREngine:
     def __init__(self):
         self._engine = RapidOCR()
@@ -91,18 +118,22 @@ class OCREngine:
         enhanced = _enhance(image)
         binary = _binarize(enhanced)
 
-        # Dois passes concorrentes — padrão (enhanced) e binarizado (Otsu) — e
-        # ficamos com o de maior confiança média. O binarizado remove o halo
-        # cinza de fontes com sombra/outline grosso, recuperando glifos que o
-        # passe padrão erra. Rodar os dois em paralelo corta a latência de pior
-        # caso quando há cores livres (poucos balões); em páginas densas o ganho
-        # diminui porque o onnxruntime já satura os cores por inferência.
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            f_bin = pool.submit(self._ocr_pass, binary)
-            raw = self._ocr_pass(enhanced)
-            raw_bin = f_bin.result()
-        if _avg_conf(raw_bin) > _avg_conf(raw):
-            raw = raw_bin
+        # Passes concorrentes — padrão (enhanced) e binarizado (Otsu) — e ficamos
+        # com o de maior confiança média. O binarizado remove o halo cinza de
+        # fontes com sombra/outline grosso. Rodar em paralelo corta a latência de
+        # pior caso quando há cores livres; em páginas densas o ganho diminui
+        # porque o onnxruntime já satura os cores por inferência.
+        candidates = [enhanced, binary]
+
+        # Texto itálico/inclinado faz o RapidOCR duplicar/fundir glifos ("IT'S NOT"
+        # → "IT'S S NOT"). Havendo inclinação real, adiciona um passe endireitado.
+        shear = _estimate_shear(binary)
+        if abs(shear) >= 0.12:
+            candidates.append(_deskew(enhanced, shear))
+
+        with ThreadPoolExecutor(max_workers=len(candidates)) as pool:
+            raws = list(pool.map(self._ocr_pass, candidates))
+        raw = max(raws, key=_avg_conf)
 
         if not raw:
             return []
