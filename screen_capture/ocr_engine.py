@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from concurrent.futures import ThreadPoolExecutor
 
 import cv2
 import numpy as np
@@ -9,7 +10,6 @@ from rapidocr_onnxruntime import RapidOCR
 _MIN_CONFIDENCE = 0.5
 _MIN_ALNUM_RATIO = 0.4
 _VOWELS = frozenset("aeiouAEIOU")
-_BINARY_CONF_THRESHOLD = 0.65  # abaixo disso, tenta versão binarizada
 
 
 def _crop_hash(img: np.ndarray) -> str:
@@ -81,18 +81,28 @@ class OCREngine:
         self._cache[key] = result
         return result
 
+    def _ocr_pass(self, gray: np.ndarray):
+        # use_cls=False: texto de webtoon é sempre na horizontal; o passo de
+        # classificação de ângulo do RapidOCR é uma inferência extra inútil aqui.
+        raw, _ = self._engine(cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR), use_cls=False)
+        return raw
+
     def _extract_uncached(self, image: np.ndarray) -> list[dict]:
         enhanced = _enhance(image)
+        binary = _binarize(enhanced)
 
-        raw, _ = self._engine(cv2.cvtColor(enhanced, cv2.COLOR_GRAY2BGR))
-
-        # Fontes decorativas (sombra, outline grosso, manuscrita) geram confiança
-        # baixa no caminho padrão porque o halo cinza distorce os glifos.
-        # Binarização Otsu remove esse halo — usa o resultado se melhorar a média.
-        if _avg_conf(raw) < _BINARY_CONF_THRESHOLD:
-            raw_bin, _ = self._engine(cv2.cvtColor(_binarize(enhanced), cv2.COLOR_GRAY2BGR))
-            if _avg_conf(raw_bin) > _avg_conf(raw):
-                raw = raw_bin
+        # Dois passes concorrentes — padrão (enhanced) e binarizado (Otsu) — e
+        # ficamos com o de maior confiança média. O binarizado remove o halo
+        # cinza de fontes com sombra/outline grosso, recuperando glifos que o
+        # passe padrão erra. Rodar os dois em paralelo corta a latência de pior
+        # caso quando há cores livres (poucos balões); em páginas densas o ganho
+        # diminui porque o onnxruntime já satura os cores por inferência.
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            f_bin = pool.submit(self._ocr_pass, binary)
+            raw = self._ocr_pass(enhanced)
+            raw_bin = f_bin.result()
+        if _avg_conf(raw_bin) > _avg_conf(raw):
+            raw = raw_bin
 
         if not raw:
             return []

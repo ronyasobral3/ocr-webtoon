@@ -441,6 +441,7 @@
     .badge-t { border: 1px solid var(--y); color: var(--y); background: rgba(255,229,0,0.04); }
     .badge-c { border: 1px solid var(--c); color: var(--c); background: rgba(0,212,255,0.04); }
     .badge-o { border: 1px solid var(--g); color: var(--g); background: rgba(57,255,20,0.04); }
+    .badge-n { border: 1px solid var(--c); color: var(--c); background: rgba(0,212,255,0.04); }
     .e-engine { font-family: var(--fm); font-size: 7px; letter-spacing: 0.12em; color: var(--dim); }
 
     .e-en { font-family: var(--fm); font-size: 10px; color: var(--muted); line-height: 1.5; margin-bottom: 5px; font-style: italic; }
@@ -574,8 +575,17 @@
           <span class="t-lbl">TRANS ENGINE</span>
           <select id="engineSel" class="monitor-sel" style="width:auto;padding:3px 7px;font-size:9px">
             <option value="google">GOOGLE</option>
+            <option value="nllb">NLLB-200</option>
             <option value="ollama">OLLAMA</option>
           </select>
+        </div>
+
+        <!-- NLLB config (visível apenas quando NLLB selecionado) -->
+        <div id="nllbConfig" class="ollama-cfg" style="display:none">
+          <div class="ollama-row">
+            <button id="testNllbBtn" class="btn-test" style="width:100%">⤓ TEST / LOAD MODEL</button>
+          </div>
+          <div id="nllbStatus" class="ollama-status">Tradução local fiel · 1º uso baixa ~2.4GB</div>
         </div>
 
         <!-- Ollama config (visível apenas quando OLLAMA selecionado) -->
@@ -744,6 +754,48 @@ const PANELS = [
 // ── BRIDGE (preenchido pelo QWebChannel quando rodando dentro do Qt) ──────────
 let BE = null;
 
+// ── PERSISTÊNCIA DE PRÉ-DEFINIÇÕES ────────────────────────────────────────────
+// As escolhas do usuário são gravadas no Python (settings.json) via bridge,
+// porque o QWebEngineProfile padrão é off-the-record (localStorage não persiste).
+const TOGGLE_IDS = ['tCuda', 'tCache', 'tScroll', 'tDebug', 'tAuto'];
+let pendingMonitor = null;
+
+function saveSetting(patch) { if (BE) BE.saveSettings(JSON.stringify(patch)); }
+
+function applyEngineUI(backend) {
+  $('ollamaConfig').style.display = backend === 'ollama' ? '' : 'none';
+  $('nllbConfig').style.display   = backend === 'nllb'   ? '' : 'none';
+  $('transEngineTag').textContent =
+    backend === 'ollama' ? ($('ollamaModel').value.trim() || 'OLLAMA')
+    : backend === 'nllb' ? 'NLLB-200'
+    : 'GOOGLE';
+}
+
+function togglesState() {
+  return Object.fromEntries(TOGGLE_IDS.map(id => [id, $(id).classList.contains('on')]));
+}
+
+function applySettings(s) {
+  if (!s) return;
+  if (s.toggles) {
+    TOGGLE_IDS.forEach(id => { if (id in s.toggles) $(id).classList.toggle('on', !!s.toggles[id]); });
+  }
+  if (typeof s.debounce === 'number') {
+    $('dbSlider').value = s.debounce;
+    $('dbVal').textContent = s.debounce + 'ms';
+  }
+  if (s.ollamaModel) $('ollamaModel').value = s.ollamaModel;
+  if (s.engine) {
+    $('engineSel').value = s.engine;
+    applyEngineUI(s.engine);
+  }
+  if (typeof s.monitor === 'number') {
+    pendingMonitor = s.monitor;
+    const sel = $('monitorSel');
+    if (sel.options.length) { sel.value = s.monitor; pendingMonitor = null; }
+  }
+}
+
 // ── STATE ─────────────────────────────────────────────────────────────────────
 const S = { running:false, bubbles:0, translated:0, cached:0, api:0, entries:0, tidx:0 };
 let dboxEls = [], simLoop = null;
@@ -869,12 +921,13 @@ function addEntry(t, cached) {
   logN.textContent = S.entries;
   if (logEmpty.parentNode === logScroll) logScroll.removeChild(logEmpty);
 
-  const isOllama = !cached && t.engine === 'ollama';
-  const badgeCls = cached ? 'badge-c' : (isOllama ? 'badge-o' : 'badge-t');
-  const badgeTxt = cached ? 'CACHED' : (isOllama ? 'OLLAMA' : 'GOOGLE');
-  const engineHint = !cached
-    ? `<span class="e-engine">${isOllama ? '🧠 LLM · ctx-aware' : '🌐 Google Translate'}</span>`
-    : '';
+  const eng = t.engine;
+  const isOllama = !cached && eng === 'ollama';
+  const isNllb   = !cached && eng === 'nllb';
+  const badgeCls = cached ? 'badge-c' : (isOllama ? 'badge-o' : (isNllb ? 'badge-n' : 'badge-t'));
+  const badgeTxt = cached ? 'CACHED' : (isOllama ? 'OLLAMA' : (isNllb ? 'NLLB' : 'GOOGLE'));
+  const hintTxt  = isOllama ? '🧠 LLM · ctx-aware' : (isNllb ? '🌐 NLLB-200 · local MT' : '🌐 Google Translate');
+  const engineHint = !cached ? `<span class="e-engine">${hintTxt}</span>` : '';
 
   const el = document.createElement('div');
   el.className = `t-entry${cached ? ' cached' : ''}`;
@@ -1016,10 +1069,14 @@ startBtn.addEventListener('click', () => {
 });
 
 // ── TOGGLES ───────────────────────────────────────────────────────────────────
-document.querySelectorAll('.toggle').forEach(t => t.addEventListener('click', () => t.classList.toggle('on')));
+TOGGLE_IDS.forEach(id => $(id).addEventListener('click', () => {
+  $(id).classList.toggle('on');
+  saveSetting({ toggles: togglesState() });
+}));
 
 // ── DEBOUNCE SLIDER ───────────────────────────────────────────────────────────
 $('dbSlider').addEventListener('input', function() { $('dbVal').textContent = this.value + 'ms'; });
+$('dbSlider').addEventListener('change', function() { saveSetting({ debounce: parseInt(this.value, 10) }); });
 
 // ── CLEAR ─────────────────────────────────────────────────────────────────────
 $('clearBtn').addEventListener('click', () => {
@@ -1043,11 +1100,23 @@ $('regionBtn').addEventListener('click', () => {
 // ── TRANSLATION ENGINE ────────────────────────────────────────────────────────
 $('engineSel').addEventListener('change', function () {
   const backend = this.value;
-  $('ollamaConfig').style.display = backend === 'ollama' ? '' : 'none';
-  $('transEngineTag').textContent = backend === 'ollama'
-    ? ($('ollamaModel').value.trim() || 'OLLAMA')
-    : 'GOOGLE';
+  applyEngineUI(backend);
   if (BE) BE.setTranslationBackend(backend);
+  saveSetting({ engine: backend });
+});
+
+// ── NLLB TEST / LOAD ──────────────────────────────────────────────────────────
+$('testNllbBtn').addEventListener('click', function () {
+  const statusEl = $('nllbStatus');
+  statusEl.textContent = 'Carregando modelo… (1º uso baixa ~2.4GB)';
+  statusEl.className = 'ollama-status';
+  $('testNllbBtn').classList.add('testing');
+  if (BE) {
+    BE.testNllb();
+  } else {
+    $('testNllbBtn').classList.remove('testing');
+    statusEl.textContent = 'Disponível apenas dentro do app.';
+  }
 });
 
 $('ollamaModel').addEventListener('change', function () {
@@ -1055,6 +1124,7 @@ $('ollamaModel').addEventListener('change', function () {
   if (model) {
     $('transEngineTag').textContent = model;
     if (BE) BE.setOllamaModel(model);
+    saveSetting({ ollamaModel: model });
   }
 });
 
@@ -1145,6 +1215,19 @@ window.addEventListener('load', function () {
       statusEl.className = 'ollama-status ' + (ok ? 'ok' : 'err');
     });
 
+    // resultado do teste/carga do NLLB-200
+    BE.nllbTestResult.connect(function (ok, msg) {
+      const statusEl = $('nllbStatus');
+      $('testNllbBtn').classList.remove('testing');
+      statusEl.textContent = msg;
+      statusEl.className = 'ollama-status ' + (ok ? 'ok' : 'err');
+    });
+
+    // restaura as pré-definições salvas (engine, modelo, debounce, toggles, monitor)
+    BE.getSettings(function (json) {
+      try { applySettings(JSON.parse(json)); } catch (e) {}
+    });
+
     // popula seletor de monitor (oculto em monitor único)
     BE.getMonitors(function (json) {
       const monitors = JSON.parse(json);
@@ -1156,9 +1239,12 @@ window.addEventListener('load', function () {
         opt.textContent = m.label + (m.primary ? ' ★' : '');
         sel.appendChild(opt);
       });
+      if (pendingMonitor != null) { sel.value = pendingMonitor; pendingMonitor = null; }
+      BE.setMonitor(parseInt(sel.value, 10));  // sincroniza o backend com o valor restaurado
       sel.style.display = '';
       sel.addEventListener('change', function () {
         BE.setMonitor(parseInt(sel.value, 10));
+        saveSetting({ monitor: parseInt(sel.value, 10) });
       });
     });
   });

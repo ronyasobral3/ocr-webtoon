@@ -95,5 +95,4 @@ No dashboard: **Settings → TRANS ENGINE → OLLAMA**, configure o nome do mode
 
 ## Melhorias futuras
 
-- Reescrita completa do balão: remover texto original, redesenhar fundo, inserir tradução estilizada (scanlation-style)
-- Validação com fontes muito decorativas (manuscritas, com sombra)
+- Reescrita **completa** do balão: remover o texto original via inpainting e redesenhar o fundo. A versão atual (estilo scanlation) apenas cobre o original com um retângulo opaco de cor amostrada.

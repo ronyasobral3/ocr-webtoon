@@ -37,7 +37,8 @@ class BackendBridge(QObject):
     Sinais Python→JS: statusChanged, translationAdded, processingStarted,
                       pipelineDone, regionChanged, ollamaTestResult.
     Slots  JS→Python: start(), stop(), selectRegion(), getMonitors(), setMonitor(i),
-                      setTranslationBackend(str), setOllamaModel(str), testOllama().
+                      setTranslationBackend(str), setOllamaModel(str), testOllama(),
+                      getSettings(), saveSettings(str).
     """
 
     # Python → JS
@@ -47,6 +48,7 @@ class BackendBridge(QObject):
     pipelineDone      = pyqtSignal()
     regionChanged     = pyqtSignal(int, int, int, int)  # left, top, w, h
     ollamaTestResult  = pyqtSignal(bool, str)           # ok, message
+    nllbTestResult    = pyqtSignal(bool, str)           # ok, message
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -57,7 +59,10 @@ class BackendBridge(QObject):
         self._set_backend_cb       = None
         self._set_ollama_model_cb  = None
         self._test_ollama_cb       = None
+        self._test_nllb_cb         = None
         self._clear_context_cb     = None
+        self._get_settings_cb      = None
+        self._save_settings_cb     = None
 
     # JS → Python
     @pyqtSlot()
@@ -110,9 +115,33 @@ class BackendBridge(QObject):
             self._test_ollama_cb()
 
     @pyqtSlot()
+    def testNllb(self) -> None:
+        if self._test_nllb_cb:
+            self._test_nllb_cb()
+
+    @pyqtSlot()
     def clearOllamaContext(self) -> None:
         if self._clear_context_cb:
             self._clear_context_cb()
+
+    @pyqtSlot(result=str)
+    def getSettings(self) -> str:
+        """Devolve as pré-definições salvas (JSON) para o dashboard restaurar no load."""
+        if self._get_settings_cb:
+            return json.dumps(self._get_settings_cb())
+        return "{}"
+
+    @pyqtSlot(str)
+    def saveSettings(self, payload: str) -> None:
+        """Persiste um patch parcial de pré-definições vindo do dashboard."""
+        if not self._save_settings_cb:
+            return
+        try:
+            data = json.loads(payload)
+        except (ValueError, TypeError):
+            return
+        if isinstance(data, dict):
+            self._save_settings_cb(data)
 
 
 class ControlPanel(QWidget):

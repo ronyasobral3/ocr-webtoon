@@ -249,11 +249,18 @@ class BubbleDetector:
 
     def detect(self, image: np.ndarray) -> list[tuple[int, int, int, int]]:
         if self._model is not None:
-            results = self._model(image, verbose=False, conf=_MIN_CONFIDENCE, imgsz=_YOLO_IMGSZ)
-            boxes = [tuple(map(int, b)) for b in results[0].boxes.xyxy.cpu().numpy()]
-            if boxes:
-                return boxes
-            logging.debug("YOLOv8 retornou 0 detecções — tentando detector OpenCV.")
+            try:
+                results = self._model(image, verbose=False, conf=_MIN_CONFIDENCE, imgsz=_YOLO_IMGSZ)
+                boxes = [tuple(map(int, b)) for b in results[0].boxes.xyxy.cpu().numpy()]
+                if boxes:
+                    return boxes
+                logging.debug("YOLOv8 retornou 0 detecções — tentando detector OpenCV.")
+            except Exception as exc:
+                # Ex.: torchvision::nms sem kernel CPU (torch/torchvision incompatíveis).
+                # Uma falha de inferência não deve derrubar o app — degrada para OpenCV
+                # e desliga o YOLO para não repetir o erro a cada frame.
+                logging.warning("Inferência YOLOv8 falhou (%s) — desligando YOLO, usando OpenCV.", exc)
+                self._model = None
         return _opencv_detect(image)
 
     def crop_bubbles(

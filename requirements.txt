@@ -9,12 +9,17 @@ numpy
 rapidocr-onnxruntime
 
 # Detecção de balões (YOLOv8)
-# torch é instalado pelo ultralytics. Para GPU NVIDIA, substitua por:
-#   pip install torch==2.12.0+cu126 --index-url https://download.pytorch.org/whl/cu126
+# torch é instalado pelo ultralytics. Para GPU NVIDIA, instale torch E torchvision
+# do MESMO índice CUDA (senão torchvision vem CPU-only e o YOLO quebra na GPU):
+#   pip install torch==2.12.0+cu126 torchvision==0.27.0+cu126 --index-url https://download.pytorch.org/whl/cu126
 ultralytics
 
 # Tradução
 deep-translator
+# NLLB-200 (engine NLLB no dashboard): tradução local fiel, offline, na GPU.
+# O modelo (~2.4GB, facebook/nllb-200-distilled-600M) baixa no 1º uso.
+transformers
+sentencepiece
 # Tradução contextual via Ollama (opcional — só necessário se usar engine OLLAMA no dashboard)
 # pip install ollama   ← instale separadamente; requer Ollama rodando em localhost:11434
 

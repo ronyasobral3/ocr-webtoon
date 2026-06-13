@@ -205,6 +205,71 @@ class _OllamaBackend:
             return False, str(exc)
 
 
+class _NLLBBackend:
+    """Tradução via NLLB-200 (Meta) — modelo de MT dedicado, fiel e offline.
+
+    Diferente de um LLM (Ollama), não é generativo: não inventa nem alucina, só
+    traduz. Roda na GPU quando disponível. Carrega sob demanda (a 1ª chamada baixa
+    ~2.4GB do HuggingFace na variante distilled-600M) e cai para Google se falhar.
+    """
+
+    def __init__(
+        self,
+        model_name: str = "facebook/nllb-200-distilled-600M",
+        src_lang: str = "eng_Latn",
+        tgt_lang: str = "por_Latn",
+    ) -> None:
+        self.model_name = model_name
+        self.src_lang = src_lang
+        self.tgt_lang = tgt_lang
+        self._tok = None
+        self._model = None
+        self._device = None
+
+    def _ensure_loaded(self) -> None:
+        if self._model is not None:
+            return
+        from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+        import torch
+
+        t0 = time.perf_counter()
+        self._tok = AutoTokenizer.from_pretrained(self.model_name)
+        self._model = AutoModelForSeq2SeqLM.from_pretrained(self.model_name)
+        self._device = "cuda" if torch.cuda.is_available() else "cpu"
+        self._model.to(self._device)
+        self._model.eval()
+        logging.info(
+            "NLLB-200 carregado: %s (%s) em %.1fs",
+            self.model_name, self._device, time.perf_counter() - t0,
+        )
+
+    def translate_batch(self, texts: list[str], _context: list[tuple[str, str]]) -> list[str]:
+        try:
+            import torch
+            self._ensure_loaded()
+            self._tok.src_lang = self.src_lang
+            tgt_id = self._tok.convert_tokens_to_ids(self.tgt_lang)
+            inputs = self._tok(
+                texts, return_tensors="pt", padding=True, truncation=True, max_length=512,
+            ).to(self._device)
+            with torch.no_grad():
+                gen = self._model.generate(
+                    **inputs, forced_bos_token_id=tgt_id, max_length=512, num_beams=4,
+                )
+            return self._tok.batch_decode(gen, skip_special_tokens=True)
+        except Exception as exc:
+            logging.warning("NLLB falhou (%s), usando Google Translate como fallback", exc)
+            return _GoogleBackend("en", "pt").translate_batch(texts, _context)
+
+    def test_connection(self) -> tuple[bool, str]:
+        try:
+            self._ensure_loaded()
+            out = self.translate_batch(["Hello, how are you?"], [])
+            return True, f"OK — NLLB ({self._device}): {out[0]}"
+        except Exception as exc:
+            return False, str(exc)
+
+
 class Translator:
     def __init__(self, source: str = "en", target: str = "pt") -> None:
         self._source = source
@@ -212,7 +277,8 @@ class Translator:
         self._cache = TranslationCache()
         self._google = _GoogleBackend(source, target)
         self._ollama = _OllamaBackend()
-        self._active: _GoogleBackend | _OllamaBackend = self._google
+        self._nllb = _NLLBBackend()
+        self._active: _GoogleBackend | _OllamaBackend | _NLLBBackend = self._google
         self._context: deque[tuple[str, str]] = deque(maxlen=15)
 
     # ── configuração ──────────────────────────────────────────────────────────
@@ -221,6 +287,9 @@ class Translator:
         if backend == "ollama":
             self._active = self._ollama
             logging.info("Tradutor: Ollama (%s @ %s)", self._ollama.model, self._ollama.host)
+        elif backend == "nllb":
+            self._active = self._nllb
+            logging.info("Tradutor: NLLB-200 (%s)", self._nllb.model_name)
         else:
             self._active = self._google
             logging.info("Tradutor: Google Translate")
@@ -232,15 +301,43 @@ class Translator:
     def test_ollama(self) -> tuple[bool, str]:
         return self._ollama.test_connection()
 
+    def test_nllb(self) -> tuple[bool, str]:
+        return self._nllb.test_connection()
+
     def clear_context(self) -> None:
         self._context.clear()
         logging.info("Janela de contexto do Ollama limpa.")
 
     @property
     def backend_name(self) -> str:
-        return "ollama" if self._active is self._ollama else "google"
+        if self._active is self._ollama:
+            return "ollama"
+        if self._active is self._nllb:
+            return "nllb"
+        return "google"
+
+    def is_cached(self, text: str) -> bool:
+        """True se `text` já está no cache (consulte ANTES de traduzir — a
+        tradução popula o cache e apagaria a distinção entre acerto e novo)."""
+        return self._cache.get(text) is not None
 
     # ── tradução ──────────────────────────────────────────────────────────────
+
+    def translate_one(self, text: str) -> str:
+        """Traduz um único texto passando pelo cache e contexto.
+
+        Usado no caminho com overlap (Google), onde cada balão é traduzido assim
+        que seu OCR termina, sobrepondo a latência de rede com o OCR dos demais.
+        `TranslationCache` é thread-safe e `deque.append` é atômico sob o GIL,
+        então é seguro chamar de várias threads do pool de balões."""
+        cached = self._cache.get(text)
+        if cached is not None:
+            return cached
+        trans = self._active.translate_batch([text], list(self._context))[0]
+        self._cache.set(text, trans)
+        if self._is_clean_context_entry(text, trans):
+            self._context.append((text, trans))
+        return trans
 
     def translate_many(self, texts: list[str]) -> list[str]:
         if not texts:

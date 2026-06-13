@@ -21,6 +21,7 @@ env/
 
 # Runtime cache
 .translation_cache.json
+.ui_settings.json
 
 # IDE / OS
 .vscode/
