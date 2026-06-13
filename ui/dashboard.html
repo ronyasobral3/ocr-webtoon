@@ -427,6 +427,9 @@
       padding: 10px 12px;
       animation: slide-in 0.28s ease-out;
       position: relative; overflow: hidden;
+      /* O log-scroll é flex column; sem isto o flexbox encolhe as entradas para
+         caber na altura e o overflow:hidden corta tudo menos o cabeçalho. */
+      flex-shrink: 0;
     }
     .t-entry::before {
       content: ''; position: absolute; left: 0; top: 0; bottom: 0;
