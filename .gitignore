@@ -13,6 +13,7 @@ build/
 venv/
 .venv/
 env/
+.build_venv/
 
 # Model weights
 *.pt
