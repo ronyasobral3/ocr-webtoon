@@ -1,0 +1,13 @@
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <clipPath id="brandHalfA"><rect x="0" y="0" width="50" height="100"/></clipPath>
+    <clipPath id="brandHalfB"><rect x="50" y="0" width="50" height="100"/></clipPath>
+  </defs>
+  <g clip-path="url(#brandHalfB)">
+    <path d="M38,28 L62,28 A10,10 0 0 1 72,38 L72,52 A10,10 0 0 1 62,62 L56,62 L32,74 L44,62 L38,62 A10,10 0 0 1 28,52 L28,38 A10,10 0 0 1 38,28 Z" fill="none" stroke="currentColor" stroke-width="5"/>
+  </g>
+  <g clip-path="url(#brandHalfA)">
+    <path d="M38,28 L62,28 A10,10 0 0 1 72,38 L72,52 A10,10 0 0 1 62,62 L56,62 L32,74 L44,62 L38,62 A10,10 0 0 1 28,52 L28,38 A10,10 0 0 1 38,28 Z" fill="currentColor"/>
+  </g>
+  <line x1="50" y1="26" x2="50" y2="64" stroke="currentColor" stroke-width="1.5" opacity="0.35" stroke-dasharray="4 4"/>
+</svg>

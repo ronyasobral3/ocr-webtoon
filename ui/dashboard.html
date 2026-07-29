@@ -21,7 +21,7 @@
       --c:         #00D4FF;
       --g:         #39FF14;
       --text:      #EFEFEF;
-      --dim:       #444;
+      --dim:       #626262;
       --muted:     #777;
       --fd:        'Bebas Neue', Impact, sans-serif;
       --fm:        'IBM Plex Mono', 'Courier New', monospace;
@@ -30,7 +30,6 @@
 
     html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--fu); -webkit-font-smoothing: antialiased; }
 
-    /* ─── GRAIN OVERLAY ─── */
     body::after {
       content: '';
       position: fixed; inset: 0;
@@ -38,7 +37,6 @@
       opacity: 0.03; pointer-events: none; z-index: 9999;
     }
 
-    /* ─── SPEED LINES BG ─── */
     body::before {
       content: '';
       position: fixed; inset: 0;
@@ -50,7 +48,7 @@
     .app {
       position: relative; z-index: 1;
       display: grid;
-      grid-template-rows: 52px 1fr 44px;
+      grid-template-rows: 52px 34px 1fr 44px;
       height: 100vh; width: 100vw;
     }
 
@@ -72,13 +70,10 @@
     .brand { display: flex; align-items: center; gap: 10px; }
     .brand-glyph {
       width: 22px; height: 22px;
-      background: var(--y);
-      clip-path: polygon(0 0, 100% 0, 100% 60%, 60% 100%, 0 100%);
+      color: var(--y);
+      flex-shrink: 0;
     }
-    .brand-name {
-      font-family: var(--fd);
-      font-size: 28px; letter-spacing: 0.05em; line-height: 1;
-    }
+    .brand-name { font-family: var(--fd); font-size: 28px; letter-spacing: 0.05em; line-height: 1; }
     .brand-dot { color: var(--y); }
     .brand-tag {
       font-family: var(--fm); font-size: 9px; letter-spacing: 0.12em;
@@ -93,12 +88,9 @@
       font-family: var(--fm); font-size: 11px; letter-spacing: 0.18em;
       transition: border-color 0.3s;
     }
-    .status-pill.is-active { border-color: var(--g); }
-    .status-pill.is-scanning { border-color: var(--c); }
-    .s-dot {
-      width: 8px; height: 8px; border-radius: 50%;
-      background: var(--dim); transition: background 0.3s, box-shadow 0.3s;
-    }
+    .status-pill.is-active  { border-color: var(--g); }
+    .status-pill.is-scanning{ border-color: var(--c); }
+    .s-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); transition: background 0.3s, box-shadow 0.3s; }
     .status-pill.is-active   .s-dot { background: var(--g); box-shadow: 0 0 8px var(--g); animation: blink 1.2s ease-in-out infinite; }
     .status-pill.is-scanning .s-dot { background: var(--c); box-shadow: 0 0 8px var(--c); animation: blink 0.5s ease-in-out infinite; }
     .s-label { color: var(--muted); transition: color 0.3s; }
@@ -120,11 +112,43 @@
     .icon-btn:hover { border-color: var(--muted); color: var(--text); }
 
     /* ══════════════════════════════════════
-       CONTENT GRID
+       TAB BAR
+    ══════════════════════════════════════ */
+    .tab-bar {
+      display: flex; align-items: stretch;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      padding: 0 20px; gap: 0;
+      position: relative; z-index: 90;
+    }
+    .tab-btn {
+      font-family: var(--fm); font-size: 9px; letter-spacing: 0.25em;
+      padding: 0 20px; background: none; border: none; border-bottom: 2px solid transparent;
+      color: var(--dim); cursor: pointer;
+      display: flex; align-items: center; gap: 6px;
+      transition: color 0.15s, border-color 0.15s;
+      margin-bottom: -1px;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--y); border-bottom-color: var(--y); }
+    .tab-btn .tb-ico { font-size: 11px; }
+    .tab-sep { width: 1px; background: var(--border); margin: 8px 0; }
+
+    /* ══════════════════════════════════════
+       TAB AREA
+    ══════════════════════════════════════ */
+    .tab-area { overflow: hidden; }
+    .tab-content { display: none; height: 100%; }
+    .tab-content.active { display: block; }
+    #tabPipeline.active { display: flex; flex-direction: column; }
+
+    /* ══════════════════════════════════════
+       CONTENT GRID (dashboard tab)
     ══════════════════════════════════════ */
     .content {
       display: grid;
       grid-template-columns: 264px 1fr 306px;
+      height: 100%;
       overflow: hidden;
     }
 
@@ -138,7 +162,6 @@
       overflow-y: auto; overflow-x: hidden;
       position: relative;
     }
-    /* halftone texture */
     .sidebar-l::before {
       content: '';
       position: absolute; inset: 0;
@@ -151,12 +174,8 @@
     .sidebar-l::-webkit-scrollbar-thumb { background: var(--border); }
 
     .ctrl-block { padding: 14px 16px; border-bottom: 1px solid var(--border); }
-    .blk-title {
-      font-family: var(--fd); font-size: 12px; letter-spacing: 0.25em;
-      color: var(--dim); margin-bottom: 11px;
-    }
+    .blk-title { font-family: var(--fd); font-size: 12px; letter-spacing: 0.25em; color: var(--dim); margin-bottom: 11px; }
 
-    /* START BUTTON */
     .btn-start {
       width: 100%; height: 76px;
       background: var(--bg); border: 3px solid var(--y);
@@ -178,11 +197,7 @@
     .btn-start .bi, .btn-start .bl { position: relative; z-index: 1; }
     .btn-start .bi { font-size: 22px; }
 
-    /* REGION */
-    .region-box {
-      background: var(--bg); border: 1px solid var(--border);
-      padding: 10px 12px; margin-bottom: 8px;
-    }
+    .region-box { background: var(--bg); border: 1px solid var(--border); padding: 10px 12px; margin-bottom: 8px; }
     .coord-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 8px; }
     .coord-row { display: flex; align-items: center; gap: 6px; font-family: var(--fm); font-size: 11px; }
     .coord-k { color: var(--y); font-weight: 700; font-size: 9px; min-width: 12px; }
@@ -195,7 +210,6 @@
     }
     .btn-sec:hover { border-color: var(--muted); color: var(--text); }
 
-    /* MONITOR SELECT */
     .monitor-sel {
       width: 100%; padding: 6px 8px; margin-bottom: 8px;
       background: var(--bg); border: 1px solid var(--border);
@@ -206,26 +220,22 @@
     .monitor-sel:focus { border-color: var(--y); }
     .monitor-sel option { background: var(--panel); }
 
-    /* TOGGLES */
     .toggle-list { display: flex; flex-direction: column; gap: 9px; }
     .t-row { display: flex; align-items: center; justify-content: space-between; }
     .t-lbl { font-family: var(--fm); font-size: 10px; letter-spacing: 0.12em; color: var(--muted); }
     .toggle {
       width: 36px; height: 18px;
       border: 1px solid var(--border); border-radius: 9px;
-      background: var(--bg); cursor: pointer; position: relative;
-      transition: all 0.2s;
+      background: var(--bg); cursor: pointer; position: relative; transition: all 0.2s;
     }
     .toggle::after {
       content: ''; position: absolute;
       width: 12px; height: 12px; border-radius: 50%;
-      background: var(--dim); top: 2px; left: 2px;
-      transition: all 0.2s;
+      background: var(--dim); top: 2px; left: 2px; transition: all 0.2s;
     }
     .toggle.on { border-color: var(--y); background: rgba(255,229,0,0.08); }
     .toggle.on::after { background: var(--y); left: 20px; box-shadow: 0 0 6px rgba(255,229,0,0.5); }
 
-    /* OLLAMA CONFIG */
     .ollama-cfg { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
     .ollama-row { display: flex; gap: 5px; align-items: center; }
     .ollama-input {
@@ -247,27 +257,9 @@
     .ollama-status.ok  { color: var(--g); }
     .ollama-status.err { color: var(--r); }
 
-    /* DEBOUNCE SLIDER */
     .slider-row { display: flex; align-items: center; gap: 10px; }
     input[type=range] { flex: 1; accent-color: var(--y); height: 2px; }
     .slider-val { font-family: var(--fm); font-size: 10px; color: var(--text); min-width: 36px; }
-
-    /* PIPELINE */
-    .pipeline { display: flex; flex-direction: column; }
-    .pipe-step {
-      padding: 7px 12px; border: 1px solid var(--border);
-      font-family: var(--fm); font-size: 9px; letter-spacing: 0.18em;
-      color: var(--dim); background: var(--bg);
-      transition: all 0.2s; display: flex; align-items: center; gap: 8px;
-    }
-    .pipe-step::before { content: '○'; font-size: 7px; transition: all 0.2s; }
-    .pipe-step.active { border-color: var(--c); color: var(--c); background: rgba(0,212,255,0.04); }
-    .pipe-step.active::before { content: '●'; }
-    .pipe-step.done { border-color: var(--g); color: var(--g); }
-    .pipe-step.done::before { content: '✓'; }
-    .pipe-join { width: 1px; height: 8px; background: var(--border); margin-left: 17px; transition: background 0.2s; }
-    .pipe-join.lit { background: var(--g); }
-    .pipe-join.act { background: var(--c); }
 
     /* ══════════════════════════════════════
        CAPTURE AREA
@@ -287,46 +279,25 @@
     }
     .live-tag.on { opacity: 1; animation: blink 1.8s ease-in-out infinite; }
 
-    .cap-viewport {
-      flex: 1; position: relative; overflow: hidden; background: #0B0B0B;
-    }
-
-    /* Speed lines in viewport */
+    .cap-viewport { flex: 1; position: relative; overflow: hidden; background: #0B0B0B; }
     .cap-viewport::before {
       content: ''; position: absolute; inset: 0;
       background: repeating-conic-gradient(at 50% 50%, transparent 0deg 3.8deg, rgba(255,229,0,0.012) 3.8deg 4deg);
       pointer-events: none; z-index: 1;
     }
 
-    /* Corner brackets */
-    .corner {
-      position: absolute; width: 18px; height: 18px;
-      pointer-events: none; z-index: 20;
-    }
+    .corner { position: absolute; width: 18px; height: 18px; pointer-events: none; z-index: 20; }
     .corner.tl { top: 10px; left: 10px; border-top: 2px solid var(--y); border-left: 2px solid var(--y); }
     .corner.tr { top: 10px; right: 10px; border-top: 2px solid var(--y); border-right: 2px solid var(--y); }
     .corner.bl { bottom: 10px; left: 10px; border-bottom: 2px solid var(--y); border-left: 2px solid var(--y); }
     .corner.br { bottom: 10px; right: 10px; border-bottom: 2px solid var(--y); border-right: 2px solid var(--y); }
 
-    /* Manga panels container */
     #mangaSim { position: absolute; inset: 18px; display: block; opacity: 0; transition: opacity 0.6s; z-index: 2; }
     #mangaSim.vis { opacity: 1; }
 
-    /* Detection boxes */
-    .dbox {
-      position: absolute; border: 2px solid var(--y);
-      pointer-events: none; z-index: 15;
-      animation: dbox-pulse 2s ease-in-out infinite;
-    }
-    .dbox-label {
-      position: absolute; top: -16px; left: 0;
-      font-family: var(--fm); font-size: 7px; letter-spacing: 0.12em;
-      color: var(--y); background: rgba(255,229,0,0.08); padding: 1px 4px; white-space: nowrap;
-    }
-    .dbox-conf {
-      position: absolute; bottom: -15px; right: 0;
-      font-family: var(--fm); font-size: 7px; color: rgba(255,229,0,0.6);
-    }
+    .dbox { position: absolute; border: 2px solid var(--y); pointer-events: none; z-index: 15; animation: dbox-pulse 2s ease-in-out infinite; }
+    .dbox-label { position: absolute; top: -16px; left: 0; font-family: var(--fm); font-size: 7px; letter-spacing: 0.12em; color: var(--y); background: rgba(255,229,0,0.08); padding: 1px 4px; white-space: nowrap; }
+    .dbox-conf  { position: absolute; bottom: -15px; right: 0; font-family: var(--fm); font-size: 7px; color: rgba(255,229,0,0.6); }
     .trans-overlay {
       position: absolute; top: 0; left: 0; right: 0; bottom: 0;
       background: rgba(0,0,0,0.84);
@@ -340,7 +311,6 @@
       50%      { border-color: rgba(255,229,0,0.7); box-shadow: 0 0 10px 2px rgba(255,229,0,0.15); }
     }
 
-    /* Scan line */
     .scan-line {
       position: absolute; left: 0; right: 0; height: 2px;
       background: linear-gradient(90deg, transparent 0%, var(--c) 40%, var(--c) 60%, transparent 100%);
@@ -351,26 +321,15 @@
     .scan-line.on { opacity: 1; animation: scan-move 2.8s linear infinite; }
     @keyframes scan-move { 0% { top: 0%; } 100% { top: 100%; } }
 
-    /* Debounce progress */
-    #debounceBar {
-      position: absolute; bottom: 0; left: 0; height: 3px;
-      background: var(--c); width: 0%; z-index: 19;
-      transition: width 0.05s linear;
-    }
+    #debounceBar { position: absolute; bottom: 0; left: 0; height: 3px; background: var(--c); width: 0%; z-index: 19; transition: width 0.05s linear; }
 
-    /* Idle state */
     .idle-state {
       position: absolute; inset: 0; z-index: 22;
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
       transition: opacity 0.4s;
     }
     .idle-state.out { opacity: 0; pointer-events: none; }
-    .idle-ico {
-      width: 72px; height: 72px; border-radius: 50%;
-      border: 2px solid var(--border);
-      display: flex; align-items: center; justify-content: center;
-      color: var(--dim);
-    }
+    .idle-ico { width: 72px; height: 72px; border-radius: 50%; border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; color: var(--dim); }
     .idle-txt { font-family: var(--fm); font-size: 11px; letter-spacing: 0.1em; color: var(--dim); text-align: center; line-height: 1.8; }
 
     /* ══════════════════════════════════════
@@ -390,51 +349,26 @@
     }
     .sidebar-r > * { position: relative; z-index: 1; }
 
-    .log-header {
-      display: flex; align-items: center; gap: 8px;
-      padding: 9px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0;
-    }
+    .log-header { display: flex; align-items: center; gap: 8px; padding: 9px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
     .log-title { font-family: var(--fd); font-size: 13px; letter-spacing: 0.22em; color: var(--dim); flex: 1; }
-    .log-n {
-      font-family: var(--fm); font-size: 9px;
-      padding: 2px 8px; border: 1px solid var(--border); color: var(--muted);
-      min-width: 28px; text-align: center;
-    }
-    .btn-clr {
-      font-family: var(--fm); font-size: 8px; letter-spacing: 0.15em;
-      padding: 3px 8px; background: none; border: 1px solid var(--border);
-      color: var(--dim); cursor: pointer; transition: all 0.15s;
-    }
+    .log-n { font-family: var(--fm); font-size: 9px; padding: 2px 8px; border: 1px solid var(--border); color: var(--muted); min-width: 28px; text-align: center; }
+    .btn-clr { font-family: var(--fm); font-size: 8px; letter-spacing: 0.15em; padding: 3px 8px; background: none; border: 1px solid var(--border); color: var(--dim); cursor: pointer; transition: all 0.15s; }
     .btn-clr:hover { border-color: var(--r); color: var(--r); }
 
-    .log-scroll {
-      flex: 1; overflow-y: auto; overflow-x: hidden;
-      padding: 12px; display: flex; flex-direction: column; gap: 10px;
-    }
+    .log-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
     .log-scroll::-webkit-scrollbar { width: 3px; }
     .log-scroll::-webkit-scrollbar-thumb { background: var(--border); }
 
-    .log-empty {
-      flex: 1; display: flex; flex-direction: column;
-      align-items: center; justify-content: center; gap: 5px;
-      font-family: var(--fm); font-size: 10px; color: var(--dim);
-      letter-spacing: 0.06em; text-align: center;
-    }
+    .log-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; font-family: var(--fm); font-size: 10px; color: var(--dim); letter-spacing: 0.06em; text-align: center; }
 
-    /* Translation entry */
     .t-entry {
       background: var(--bg); border: 1px solid var(--border);
       padding: 10px 12px;
       animation: slide-in 0.28s ease-out;
       position: relative; overflow: hidden;
-      /* O log-scroll é flex column; sem isto o flexbox encolhe as entradas para
-         caber na altura e o overflow:hidden corta tudo menos o cabeçalho. */
       flex-shrink: 0;
     }
-    .t-entry::before {
-      content: ''; position: absolute; left: 0; top: 0; bottom: 0;
-      width: 3px; background: var(--y);
-    }
+    .t-entry::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--y); }
     .t-entry.cached::before { background: var(--c); }
     @keyframes slide-in { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
 
@@ -447,9 +381,9 @@
     .badge-n { border: 1px solid var(--c); color: var(--c); background: rgba(0,212,255,0.04); }
     .e-engine { font-family: var(--fm); font-size: 7px; letter-spacing: 0.12em; color: var(--dim); }
 
-    .e-en { font-family: var(--fm); font-size: 10px; color: var(--muted); line-height: 1.5; margin-bottom: 5px; font-style: italic; }
+    .e-en  { font-family: var(--fm); font-size: 10px; color: var(--muted); line-height: 1.5; margin-bottom: 5px; font-style: italic; }
     .e-arr { font-size: 9px; color: var(--dim); margin-bottom: 4px; }
-    .e-pt { font-family: var(--fu); font-size: 12px; font-weight: 800; color: var(--text); line-height: 1.4; }
+    .e-pt  { font-family: var(--fu); font-size: 12px; font-weight: 800; color: var(--text); line-height: 1.4; }
 
     .e-conf { margin-top: 7px; }
     .e-conf-lbl { font-family: var(--fm); font-size: 8px; color: var(--dim); }
@@ -460,22 +394,14 @@
     /* ══════════════════════════════════════
        STATS BAR
     ══════════════════════════════════════ */
-    .statsbar {
-      display: flex; align-items: center;
-      border-top: 2px solid var(--border-hi);
-      background: var(--panel); padding: 0 18px; gap: 0;
-      overflow: hidden;
-    }
+    .statsbar { display: flex; align-items: center; border-top: 2px solid var(--border-hi); background: var(--panel); padding: 0 18px; gap: 0; overflow: hidden; }
     .stat { display: flex; align-items: center; gap: 7px; padding: 0 14px; }
     .stat:first-child { padding-left: 0; }
     .stat-lbl { font-family: var(--fm); font-size: 8px; letter-spacing: 0.22em; color: var(--dim); }
     .stat-val { font-family: var(--fm); font-size: 14px; font-weight: 700; color: var(--text); transition: color 0.2s; }
     .stat-val.lit { color: var(--y); }
     .sdiv { width: 1px; height: 22px; background: var(--border); flex-shrink: 0; }
-    .engine-tag {
-      font-family: var(--fm); font-size: 8px; letter-spacing: 0.1em;
-      padding: 2px 7px; border: 1px solid var(--border); color: var(--dim);
-    }
+    .engine-tag { font-family: var(--fm); font-size: 8px; letter-spacing: 0.1em; padding: 2px 7px; border: 1px solid var(--border); color: var(--dim); }
     .stats-right { margin-left: auto; display: flex; gap: 6px; align-items: center; }
 
     /* ══════════════════════════════════════
@@ -486,7 +412,7 @@
       transform: translate(-50%, -50%) scale(0);
       font-family: var(--fd); font-size: 88px; letter-spacing: 0.05em;
       color: var(--y);
-      text-shadow: 5px 5px 0 #000, -5px -5px 0 #000, 5px -5px 0 #000, -5px 5px 0 #000, 0 5px 0 #000, 5px 0 0 #000;
+      text-shadow: 5px 5px 0 #000, -5px -5px 0 #000, 5px -5px 0 #000, -5px 5px 0 #000;
       pointer-events: none; z-index: 5000;
     }
     #actionWord.pop { animation: word-pop 0.65s ease-out forwards; }
@@ -498,10 +424,211 @@
     }
 
     /* ══════════════════════════════════════
-       SCROLLBAR GLOBAL
+       PIPELINE TAB
     ══════════════════════════════════════ */
+    .pipe-page {
+      display: flex; flex-direction: column;
+      height: 100%; background: var(--bg);
+      overflow: hidden;
+    }
+
+    .pipe-hdr {
+      display: flex; align-items: center; gap: 16px;
+      padding: 10px 28px; flex-shrink: 0;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+    }
+    .pipe-hdr-title {
+      font-family: var(--fd); font-size: 20px; letter-spacing: 0.18em;
+      color: var(--text);
+    }
+    .pipe-instance {
+      font-family: var(--fm); font-size: 9px; letter-spacing: 0.18em;
+      color: var(--dim);
+    }
+    .pipe-instance strong { color: var(--y); }
+    .pipe-live-badge {
+      margin-left: auto;
+      font-family: var(--fm); font-size: 9px; letter-spacing: 0.2em;
+      padding: 4px 14px; border: 1px solid var(--border); color: var(--dim);
+      transition: all 0.3s;
+    }
+    .pipe-live-badge.on { border-color: var(--y); color: var(--y); animation: blink 1.5s ease-in-out infinite; }
+
+    .pipe-scroll {
+      flex: 1; overflow-y: auto; overflow-x: hidden;
+      padding: 20px 28px;
+      display: flex; flex-direction: column;
+    }
+    .pipe-scroll::-webkit-scrollbar { width: 3px; }
+    .pipe-scroll::-webkit-scrollbar-thumb { background: var(--border); }
+
+    /* ── PIPELINE CARD ── */
+    .pc {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      display: grid;
+      grid-template-columns: 56px 1fr auto;
+      grid-template-rows: auto auto;
+      transition: border-color 0.3s, background 0.3s;
+      position: relative; overflow: hidden;
+    }
+    .pc[data-state="active"] {
+      border-color: var(--c);
+      background: rgba(0,212,255,0.025);
+      box-shadow: 0 0 20px rgba(0,212,255,0.07);
+    }
+    .pc[data-state="done"] {
+      border-color: var(--g);
+    }
+
+    /* cancelled state */
+    .pc[data-state="cancelled"] {
+      border-color: var(--r);
+      background: rgba(255,45,85,0.025);
+    }
+    .pc[data-state="cancelled"] .pc-icon { color: var(--r); border-right-color: var(--r); }
+    .pc[data-state="cancelled"] .pc-name { color: var(--r); }
+    .pc[data-state="cancelled"] .pc-fill { background: var(--r); width: 100%; animation: none; }
+    .pc[data-state="cancelled"] .pc-val  { color: var(--r); }
+    .pc[data-state="cancelled"] .pc-preview { display: block; color: var(--r); }
+    @keyframes pc-cancel-flash {
+      0%,100% { opacity: 1; } 50% { opacity: 0.35; }
+    }
+    .pc[data-state="cancelled"] { animation: pc-cancel-flash 0.4s ease-in-out 3; }
+
+    /* scan sweep when active */
+    .pc[data-state="active"]::after {
+      content: '';
+      position: absolute; top: 0; left: -100%; width: 60%; height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(0,212,255,0.06), transparent);
+      animation: pc-sweep 2s linear infinite;
+    }
+    @keyframes pc-sweep { to { left: 200%; } }
+
+    .pc-icon {
+      grid-row: 1; grid-column: 1;
+      border-right: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; color: var(--dim);
+      padding: 16px 0;
+      transition: color 0.3s, border-color 0.3s;
+    }
+    .pc[data-state="active"] .pc-icon { color: var(--c); border-right-color: var(--c); }
+    .pc[data-state="done"]   .pc-icon { color: var(--g); border-right-color: var(--g); }
+
+    .pc-body {
+      grid-row: 1; grid-column: 2;
+      padding: 12px 18px;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .pc-name {
+      font-family: var(--fd); font-size: 15px; letter-spacing: 0.2em;
+      color: var(--muted); transition: color 0.3s;
+    }
+    .pc[data-state="active"] .pc-name { color: var(--c); }
+    .pc[data-state="done"]   .pc-name { color: var(--g); }
+
+    .pc-sub { font-family: var(--fm); font-size: 8px; letter-spacing: 0.15em; color: var(--dim); }
+
+    .pc-bar { height: 2px; background: var(--border); margin-top: 6px; position: relative; overflow: hidden; }
+    .pc-fill {
+      position: absolute; top: 0; left: 0; height: 100%;
+      width: 0%; background: var(--dim);
+      transition: width 0.5s ease-out, background 0.3s;
+    }
+    .pc[data-state="active"] .pc-fill { background: var(--c); width: 55%; animation: pc-bar-pulse 1.4s ease-in-out infinite; }
+    .pc[data-state="done"]   .pc-fill { background: var(--g); width: 100%; animation: none; }
+    @keyframes pc-bar-pulse { 0%,100% { width: 35%; } 50% { width: 75%; } }
+
+    .pc-right {
+      grid-row: 1; grid-column: 3;
+      padding: 12px 18px;
+      display: flex; flex-direction: column; align-items: flex-end; justify-content: center;
+      gap: 10px; min-width: 110px;
+      border-left: 1px solid var(--border);
+    }
+    .pc-metric { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+    .pc-val { font-family: var(--fm); font-size: 18px; font-weight: 700; color: var(--muted); line-height: 1; transition: color 0.3s; }
+    .pc-val-sm { font-size: 13px; }
+    .pc[data-state="active"] .pc-val { color: var(--c); }
+    .pc[data-state="done"]   .pc-val { color: var(--g); }
+    .pc-mlbl { font-family: var(--fm); font-size: 7px; letter-spacing: 0.2em; color: var(--dim); }
+
+    /* Preview row — spans all columns */
+    .pc-preview {
+      grid-column: 1 / -1; grid-row: 2;
+      border-top: 1px solid var(--border);
+      padding: 8px 18px 8px 74px;
+      font-family: var(--fm); font-size: 9px; letter-spacing: 0.06em; color: var(--dim);
+      display: none;
+      background: rgba(0,0,0,0.25);
+    }
+    .pc[data-state="active"] .pc-preview { display: block; }
+    .pc[data-state="done"]   .pc-preview { display: block; }
+    .pc[data-state="active"] .pc-preview { color: var(--c); }
+    .pc[data-state="done"]   .pc-preview { color: var(--muted); }
+
+    .pc-preview-lbl { color: var(--y); margin-right: 8px; font-weight: 700; }
+    .pc-thumbs { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .pc-thumb {
+      width: 52px; height: 34px;
+      background: var(--panel-alt); border: 1px solid currentColor;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 7px; letter-spacing: 0.1em;
+      opacity: 0.7;
+    }
+
+    /* Connector between cards */
+    .pc-conn {
+      width: 1px; height: 20px;
+      margin-left: 27px;
+      background: var(--border);
+      transition: background 0.3s;
+    }
+    .pc-conn.lit { background: var(--g); }
+    .pc-conn.act { background: var(--c); }
+
+    /* ── TERMINAL ── */
+    .pipe-term {
+      flex-shrink: 0; height: 120px;
+      background: #050505;
+      border-top: 1px solid var(--border);
+      overflow-y: auto; overflow-x: hidden;
+      padding: 8px 28px;
+      font-family: var(--fm); font-size: 9px; line-height: 1.8; letter-spacing: 0.04em;
+    }
+    .pipe-term::-webkit-scrollbar { width: 3px; }
+    .pipe-term::-webkit-scrollbar-thumb { background: var(--border); }
+    .term-line { color: var(--dim); }
+    .term-line.ok   { color: var(--g); }
+    .term-line.warn { color: var(--y); }
+    .term-line.err  { color: var(--r); }
+    .term-ts { color: var(--muted); margin-right: 10px; }
+
     ::-webkit-scrollbar { width: 3px; }
     ::-webkit-scrollbar-thumb { background: var(--border); }
+
+    /* ══════════════════════════════════════
+       ACCESSIBILITY
+    ══════════════════════════════════════ */
+    button:focus-visible,
+    select:focus-visible,
+    input:focus-visible,
+    .toggle:focus-visible,
+    .tab-btn:focus-visible {
+      outline: 2px solid var(--y);
+      outline-offset: 2px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
   </style>
 </head>
 <body>
@@ -512,7 +639,15 @@
   <!-- ═══ TOPBAR ═══ -->
   <header class="topbar">
     <div class="brand">
-      <div class="brand-glyph"></div>
+      <svg class="brand-glyph" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <clipPath id="brandHalfA"><rect x="0" y="0" width="50" height="100"/></clipPath>
+          <clipPath id="brandHalfB"><rect x="50" y="0" width="50" height="100"/></clipPath>
+        </defs>
+        <g clip-path="url(#brandHalfB)"><path d="M38,28 L62,28 A10,10 0 0 1 72,38 L72,52 A10,10 0 0 1 62,62 L56,62 L32,74 L44,62 L38,62 A10,10 0 0 1 28,52 L28,38 A10,10 0 0 1 38,28 Z" fill="none" stroke="currentColor" stroke-width="5"/></g>
+        <g clip-path="url(#brandHalfA)"><path d="M38,28 L62,28 A10,10 0 0 1 72,38 L72,52 A10,10 0 0 1 62,62 L56,62 L32,74 L44,62 L38,62 A10,10 0 0 1 28,52 L28,38 A10,10 0 0 1 38,28 Z" fill="currentColor"/></g>
+        <line x1="50" y1="26" x2="50" y2="64" stroke="currentColor" stroke-width="1.5" opacity="0.35" stroke-dasharray="4 4"/>
+      </svg>
       <span class="brand-name">WEBTOON<span class="brand-dot">·</span>OCR</span>
       <span class="brand-tag">v0.1.0-alpha</span>
     </div>
@@ -524,7 +659,7 @@
 
     <div class="topbar-right">
       <div class="lang-pair">
-        <span class="lang">EN</span>
+        <span class="lang" id="langSrc">EN</span>
         <span class="lang-arr">→</span>
         <span class="lang">PT</span>
       </div>
@@ -533,155 +668,309 @@
     </div>
   </header>
 
-  <!-- ═══ MAIN ═══ -->
-  <main class="content">
+  <!-- ═══ TAB BAR ═══ -->
+  <nav class="tab-bar">
+    <button class="tab-btn active" data-tab="dashboard">
+      <span class="tb-ico">⊟</span> DASHBOARD
+    </button>
+    <div class="tab-sep"></div>
+    <button class="tab-btn" data-tab="pipeline">
+      <span class="tb-ico">◈</span> PIPELINE
+    </button>
+  </nav>
 
-    <!-- LEFT SIDEBAR -->
-    <aside class="sidebar-l">
+  <!-- ═══ TAB AREA ═══ -->
+  <div class="tab-area">
 
-      <!-- START/STOP -->
-      <div class="ctrl-block">
-        <button class="btn-start" id="startBtn">
-          <span class="bi" id="startIco">▶</span>
-          <span class="bl" id="startLbl">START</span>
-        </button>
-      </div>
+    <!-- ── DASHBOARD TAB ── -->
+    <div class="tab-content active" id="tabDashboard">
+      <main class="content">
 
-      <!-- REGION -->
-      <div class="ctrl-block">
-        <p class="blk-title">CAPTURE REGION</p>
-        <select id="monitorSel" class="monitor-sel" style="display:none"></select>
-        <div class="region-box">
-          <div class="coord-grid">
-            <div class="coord-row"><span class="coord-k">X</span><span class="coord-v" id="rX">0</span></div>
-            <div class="coord-row"><span class="coord-k">Y</span><span class="coord-v" id="rY">0</span></div>
-            <div class="coord-row"><span class="coord-k">W</span><span class="coord-v" id="rW">1280</span></div>
-            <div class="coord-row"><span class="coord-k">H</span><span class="coord-v" id="rH">720</span></div>
+        <!-- LEFT SIDEBAR -->
+        <aside class="sidebar-l">
+
+          <div class="ctrl-block">
+            <button class="btn-start" id="startBtn">
+              <span class="bi" id="startIco">▶</span>
+              <span class="bl" id="startLbl">START</span>
+            </button>
           </div>
-          <button class="btn-sec" id="regionBtn">⊞ SELECT REGION</button>
-        </div>
-      </div>
 
-      <!-- SETTINGS -->
-      <div class="ctrl-block">
-        <p class="blk-title">SETTINGS</p>
-        <div class="toggle-list">
-          <div class="t-row"><span class="t-lbl">CUDA ACCEL</span>    <div class="toggle on" id="tCuda"></div></div>
-          <div class="t-row"><span class="t-lbl">TRANS. CACHE</span>  <div class="toggle on" id="tCache"></div></div>
-          <div class="t-row"><span class="t-lbl">SCROLL DETECT</span> <div class="toggle on" id="tScroll"></div></div>
-          <div class="t-row"><span class="t-lbl">DEBUG OVERLAY</span> <div class="toggle"    id="tDebug"></div></div>
-          <div class="t-row"><span class="t-lbl">AUTO TRANSLATE</span><div class="toggle on" id="tAuto"></div></div>
-        </div>
-
-        <!-- TRANSLATION ENGINE -->
-        <div class="t-row" style="margin-top:10px">
-          <span class="t-lbl">TRANS ENGINE</span>
-          <select id="engineSel" class="monitor-sel" style="width:auto;padding:3px 7px;font-size:9px">
-            <option value="google">GOOGLE</option>
-            <option value="nllb">NLLB-200</option>
-            <option value="ollama">OLLAMA</option>
-          </select>
-        </div>
-
-        <!-- NLLB config (visível apenas quando NLLB selecionado) -->
-        <div id="nllbConfig" class="ollama-cfg" style="display:none">
-          <div class="ollama-row">
-            <button id="testNllbBtn" class="btn-test" style="width:100%">⤓ TEST / LOAD MODEL</button>
+          <div class="ctrl-block">
+            <p class="blk-title">CAPTURE REGION</p>
+            <select id="monitorSel" class="monitor-sel" style="display:none"></select>
+            <div class="region-box">
+              <div class="coord-grid">
+                <div class="coord-row"><span class="coord-k">X</span><span class="coord-v" id="rX">0</span></div>
+                <div class="coord-row"><span class="coord-k">Y</span><span class="coord-v" id="rY">0</span></div>
+                <div class="coord-row"><span class="coord-k">W</span><span class="coord-v" id="rW">1280</span></div>
+                <div class="coord-row"><span class="coord-k">H</span><span class="coord-v" id="rH">720</span></div>
+              </div>
+              <button class="btn-sec" id="regionBtn">⊞ SELECT REGION</button>
+            </div>
           </div>
-          <div id="nllbStatus" class="ollama-status">Tradução local fiel · 1º uso baixa ~2.4GB</div>
-        </div>
 
-        <!-- Ollama config (visível apenas quando OLLAMA selecionado) -->
-        <div id="ollamaConfig" class="ollama-cfg" style="display:none">
-          <div class="ollama-row">
-            <input id="ollamaModel" class="ollama-input" value="qwen2.5:3b" placeholder="model name">
-            <button id="testOllamaBtn" class="btn-test">TEST</button>
+          <div class="ctrl-block">
+            <p class="blk-title">SETTINGS</p>
+            <div class="toggle-list">
+              <div class="t-row"><span class="t-lbl">CUDA ACCEL</span>    <div class="toggle on" id="tCuda" role="switch" aria-checked="true" tabindex="0"></div></div>
+              <div class="t-row"><span class="t-lbl">TRANS. CACHE</span>  <div class="toggle on" id="tCache" role="switch" aria-checked="true" tabindex="0"></div></div>
+              <div class="t-row"><span class="t-lbl">SCROLL DETECT</span> <div class="toggle on" id="tScroll" role="switch" aria-checked="true" tabindex="0"></div></div>
+              <div class="t-row"><span class="t-lbl">DEBUG OVERLAY</span> <div class="toggle"    id="tDebug" role="switch" aria-checked="false" tabindex="0"></div></div>
+              <div class="t-row"><span class="t-lbl">AUTO TRANSLATE</span><div class="toggle on" id="tAuto" role="switch" aria-checked="true" tabindex="0"></div></div>
+            </div>
+
+            <div class="t-row" style="margin-top:10px">
+              <span class="t-lbl">SOURCE LANG</span>
+              <select id="ocrModeSel" class="monitor-sel" style="width:auto;padding:3px 7px;font-size:9px">
+                <option value="en">WEBTOON (EN)</option>
+                <option value="manga_en">MANGA (EN)</option>
+                <option value="ja">MANGA (JP)</option>
+              </select>
+            </div>
+
+            <div class="t-row" style="margin-top:6px">
+              <span class="t-lbl">TRANS ENGINE</span>
+              <select id="engineSel" class="monitor-sel" style="width:auto;padding:3px 7px;font-size:9px">
+                <option value="google">GOOGLE</option>
+                <option value="nllb">NLLB-200</option>
+                <option value="ollama">OLLAMA</option>
+              </select>
+            </div>
+
+            <div id="nllbConfig" class="ollama-cfg" style="display:none">
+              <div class="ollama-row">
+                <button id="testNllbBtn" class="btn-test" style="width:100%">⤓ TEST / LOAD MODEL</button>
+              </div>
+              <div id="nllbStatus" class="ollama-status">Tradução local fiel · 1º uso baixa ~2.4GB</div>
+            </div>
+
+            <div id="ollamaConfig" class="ollama-cfg" style="display:none">
+              <div class="ollama-row">
+                <input id="ollamaModel" class="ollama-input" value="qwen2.5:3b" placeholder="model name">
+                <button id="testOllamaBtn" class="btn-test">TEST</button>
+              </div>
+              <div class="ollama-row">
+                <button id="clearCtxBtn" class="btn-test" style="width:100%;border-color:var(--r);color:var(--r)">⌫ CLEAR CONTEXT</button>
+              </div>
+              <div id="ollamaStatus" class="ollama-status"></div>
+            </div>
           </div>
-          <div class="ollama-row">
-            <button id="clearCtxBtn" class="btn-test" style="width:100%;border-color:var(--r);color:var(--r)">⌫ CLEAR CONTEXT</button>
+
+          <div class="ctrl-block">
+            <p class="blk-title">SCROLL DEBOUNCE</p>
+            <div class="slider-row">
+              <input type="range" min="100" max="1000" value="300" id="dbSlider">
+              <span class="slider-val" id="dbVal">300ms</span>
+            </div>
           </div>
-          <div id="ollamaStatus" class="ollama-status"></div>
-        </div>
-      </div>
 
-      <!-- DEBOUNCE -->
-      <div class="ctrl-block">
-        <p class="blk-title">SCROLL DEBOUNCE</p>
-        <div class="slider-row">
-          <input type="range" min="100" max="1000" value="300" id="dbSlider">
-          <span class="slider-val" id="dbVal">300ms</span>
-        </div>
-      </div>
+        </aside>
 
-      <!-- PIPELINE -->
-      <div class="ctrl-block" style="flex:1">
-        <p class="blk-title">PIPELINE</p>
-        <div class="pipeline" id="pipeline">
-          <div class="pipe-step" data-s="capture">CAPTURE</div>
-          <div class="pipe-join"></div>
-          <div class="pipe-step" data-s="motion">MOTION DETECT</div>
-          <div class="pipe-join"></div>
-          <div class="pipe-step" data-s="bubble">BUBBLE DET.</div>
-          <div class="pipe-join"></div>
-          <div class="pipe-step" data-s="ocr">PaddleOCR</div>
-          <div class="pipe-join"></div>
-          <div class="pipe-step" data-s="translate">TRANSLATE</div>
-          <div class="pipe-join"></div>
-          <div class="pipe-step" data-s="overlay">OVERLAY</div>
-        </div>
-      </div>
-
-    </aside>
-
-    <!-- CAPTURE AREA -->
-    <section class="capture-area">
-      <div class="cap-header">
-        <span class="cap-title">CAPTURE PREVIEW</span>
-        <span class="fps-disp" id="fpsDsp">— FPS</span>
-        <div class="live-tag" id="liveTag">● LIVE</div>
-      </div>
-
-      <div class="cap-viewport" id="viewport">
-        <div class="corner tl"></div>
-        <div class="corner tr"></div>
-        <div class="corner bl"></div>
-        <div class="corner br"></div>
-
-        <div id="mangaSim"></div>
-        <div class="scan-line" id="scanLine"></div>
-        <div id="debounceBar"></div>
-
-        <div class="idle-state" id="idleState">
-          <div class="idle-ico">
-            <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
-              <rect x="4" y="8"  width="28" height="20" rx="2" stroke="currentColor" stroke-width="1.5"/>
-              <line x1="10" y1="14" x2="26" y2="14" stroke="currentColor" stroke-width="1.5"/>
-              <line x1="10" y1="18" x2="22" y2="18" stroke="currentColor" stroke-width="1.5"/>
-              <line x1="10" y1="22" x2="24" y2="22" stroke="currentColor" stroke-width="1.5"/>
-              <circle cx="18" cy="31" r="1.5" fill="currentColor"/>
-            </svg>
+        <!-- CAPTURE AREA -->
+        <section class="capture-area">
+          <div class="cap-header">
+            <span class="cap-title">CAPTURE PREVIEW</span>
+            <span class="fps-disp" id="fpsDsp">— FPS</span>
+            <div class="live-tag" id="liveTag">● LIVE</div>
           </div>
-          <p class="idle-txt">Press START to begin scanning<br><span style="font-size:9px;opacity:.5">Select a capture region first</span></p>
-        </div>
-      </div>
-    </section>
 
-    <!-- RIGHT SIDEBAR — LOG -->
-    <aside class="sidebar-r">
-      <div class="log-header">
-        <span class="log-title">TRANSLATIONS</span>
-        <button class="btn-clr" id="clearBtn">CLEAR</button>
-        <span class="log-n" id="logN">0</span>
-      </div>
-      <div class="log-scroll" id="logScroll">
-        <div class="log-empty" id="logEmpty">
-          <p>No translations yet.</p>
-          <p style="opacity:.5">Start scanning to see results.</p>
-        </div>
-      </div>
-    </aside>
+          <div class="cap-viewport" id="viewport">
+            <div class="corner tl"></div>
+            <div class="corner tr"></div>
+            <div class="corner bl"></div>
+            <div class="corner br"></div>
 
-  </main>
+            <div id="mangaSim"></div>
+            <div class="scan-line" id="scanLine"></div>
+            <div id="debounceBar"></div>
+
+            <div class="idle-state" id="idleState">
+              <div class="idle-ico">
+                <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+                  <rect x="4" y="8"  width="28" height="20" rx="2" stroke="currentColor" stroke-width="1.5"/>
+                  <line x1="10" y1="14" x2="26" y2="14" stroke="currentColor" stroke-width="1.5"/>
+                  <line x1="10" y1="18" x2="22" y2="18" stroke="currentColor" stroke-width="1.5"/>
+                  <line x1="10" y1="22" x2="24" y2="22" stroke="currentColor" stroke-width="1.5"/>
+                  <circle cx="18" cy="31" r="1.5" fill="currentColor"/>
+                </svg>
+              </div>
+              <p class="idle-txt">Press START to begin scanning<br><span style="font-size:9px;opacity:.5">Select a capture region first</span></p>
+            </div>
+          </div>
+        </section>
+
+        <!-- RIGHT SIDEBAR — LOG -->
+        <aside class="sidebar-r">
+          <div class="log-header">
+            <span class="log-title">TRANSLATIONS</span>
+            <button class="btn-clr" id="clearBtn">CLEAR</button>
+            <span class="log-n" id="logN">0</span>
+          </div>
+          <div class="log-scroll" id="logScroll">
+            <div class="log-empty" id="logEmpty">
+              <p>No translations yet.</p>
+              <p style="opacity:.5">Start scanning to see results.</p>
+            </div>
+          </div>
+        </aside>
+
+      </main>
+    </div><!-- #tabDashboard -->
+
+    <!-- ── PIPELINE TAB ── -->
+    <div class="tab-content" id="tabPipeline">
+      <div class="pipe-page">
+
+        <div class="pipe-hdr">
+          <span class="pipe-hdr-title">PIPELINE ARCHITECTURE</span>
+          <span class="pipe-instance">ACTIVE INSTANCE: <strong>CORE-RUNNER-01</strong></span>
+          <div class="pipe-live-badge" id="pipeLiveBadge">● LIVE STREAMING</div>
+        </div>
+
+        <div class="pipe-scroll">
+
+          <!-- STEP 1 — CAPTURE -->
+          <div class="pc" id="pcCapture" data-state="">
+            <div class="pc-icon">
+              <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+                <rect x="1" y="3" width="20" height="14" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
+                <line x1="1" y1="10" x2="21" y2="10" stroke="currentColor" stroke-width="1" stroke-dasharray="2 2" opacity=".4"/>
+                <circle cx="11" cy="19" r="1.2" fill="currentColor" opacity=".5"/>
+              </svg>
+            </div>
+            <div class="pc-body">
+              <span class="pc-name">IMAGE CAPTURE</span>
+              <span class="pc-sub" id="pcCapSub">SOURCE: DESKTOP WINDOW STREAM</span>
+              <div class="pc-bar"><div class="pc-fill"></div></div>
+            </div>
+            <div class="pc-right">
+              <div class="pc-metric">
+                <span class="pc-val" id="pcCapLat">—</span>
+                <span class="pc-mlbl">ms LATENCY</span>
+              </div>
+            </div>
+          </div>
+          <div class="pc-conn" id="pcConn0"></div>
+
+          <!-- STEP 2 — PRE-PROCESSING -->
+          <div class="pc" id="pcPreproc" data-state="">
+            <div class="pc-icon">
+              <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+                <circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="1.5"/>
+                <circle cx="11" cy="11" r="4" stroke="currentColor" stroke-width="1.5"/>
+                <circle cx="11" cy="11" r="1.5" fill="currentColor"/>
+              </svg>
+            </div>
+            <div class="pc-body">
+              <span class="pc-name">PRE-PROCESSING</span>
+              <span class="pc-sub">FILTER: UPSCALE · CLAHE · UNSHARP MASK</span>
+              <div class="pc-bar"><div class="pc-fill"></div></div>
+            </div>
+            <div class="pc-right">
+              <div class="pc-metric">
+                <span class="pc-val" id="pcPrepLat">—</span>
+                <span class="pc-mlbl">ms LATENCY</span>
+              </div>
+            </div>
+          </div>
+          <div class="pc-conn" id="pcConn1"></div>
+
+          <!-- STEP 3 — BUBBLE DETECTION -->
+          <div class="pc" id="pcBubble" data-state="">
+            <div class="pc-icon">
+              <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+                <path d="M11 2C6.03 2 2 5.69 2 10.2c0 2.65 1.44 5.02 3.7 6.55L5 20l3.7-1.6c.72.18 1.49.28 2.3.28 4.97 0 9-3.69 9-8.2S15.97 2 11 2z" stroke="currentColor" stroke-width="1.5"/>
+                <circle cx="8"  cy="10" r="1.2" fill="currentColor" opacity=".6"/>
+                <circle cx="11" cy="10" r="1.2" fill="currentColor" opacity=".6"/>
+                <circle cx="14" cy="10" r="1.2" fill="currentColor" opacity=".6"/>
+              </svg>
+            </div>
+            <div class="pc-body">
+              <span class="pc-name">YOLOV8 BUBBLE DETECTION</span>
+              <span class="pc-sub">MODEL: OGKALU/COMIC-SPEECH-BUBBLE · YOLOv8m</span>
+              <div class="pc-bar"><div class="pc-fill"></div></div>
+            </div>
+            <div class="pc-right">
+              <div class="pc-metric">
+                <span class="pc-val" id="pcBubConf">—</span>
+                <span class="pc-mlbl">CONFIDENCE</span>
+              </div>
+              <div class="pc-metric">
+                <span class="pc-val pc-val-sm" id="pcBubLat">—ms</span>
+                <span class="pc-mlbl">LATENCY</span>
+              </div>
+            </div>
+            <div class="pc-preview" id="pcBubPreview">
+              <div class="pc-thumbs" id="pcBubThumbs"></div>
+            </div>
+          </div>
+          <div class="pc-conn" id="pcConn2"></div>
+
+          <!-- STEP 4 — OCR -->
+          <div class="pc" id="pcOcr" data-state="">
+            <div class="pc-icon">
+              <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+                <rect x="2" y="4" width="18" height="14" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
+                <line x1="5" y1="8"  x2="17" y2="8"  stroke="currentColor" stroke-width="1.5"/>
+                <line x1="5" y1="11" x2="14" y2="11" stroke="currentColor" stroke-width="1.5"/>
+                <line x1="5" y1="14" x2="16" y2="14" stroke="currentColor" stroke-width="1.5"/>
+              </svg>
+            </div>
+            <div class="pc-body">
+              <span class="pc-name">OCR TEXT EXTRACTION</span>
+              <span class="pc-sub">ENGINE: RAPIDOCR · ONNX-RUNTIME</span>
+              <div class="pc-bar"><div class="pc-fill"></div></div>
+            </div>
+            <div class="pc-right">
+              <div class="pc-metric">
+                <span class="pc-val" id="pcOcrScore">—</span>
+                <span class="pc-mlbl">SCORE</span>
+              </div>
+              <div class="pc-metric">
+                <span class="pc-val pc-val-sm" id="pcOcrLat">—ms</span>
+                <span class="pc-mlbl">LATENCY</span>
+              </div>
+            </div>
+            <div class="pc-preview">
+              <span class="pc-preview-lbl">[OCR]</span><span id="pcOcrText">Waiting for scan…</span>
+            </div>
+          </div>
+          <div class="pc-conn" id="pcConn3"></div>
+
+          <!-- STEP 5 — TRANSLATE -->
+          <div class="pc" id="pcTrans" data-state="">
+            <div class="pc-icon">
+              <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+                <path d="M3 5h10M8 5v-.5M3 5c0 3.5 2 6 5 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M8 12c1.5.5 3 .5 4-.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M13 8l2.5 8M13 8l-2.5 8M13 8h-2M15.5 16h-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <div class="pc-body">
+              <span class="pc-name">TRANSLATION</span>
+              <span class="pc-sub" id="pcTransSub">MODEL: NLLB-200-DISTILLED-600M · LOCAL GPU</span>
+              <div class="pc-bar"><div class="pc-fill"></div></div>
+            </div>
+            <div class="pc-right">
+              <div class="pc-metric">
+                <span class="pc-val" id="pcTransLat">—</span>
+                <span class="pc-mlbl">ms LATENCY</span>
+              </div>
+            </div>
+            <div class="pc-preview">
+              <span class="pc-preview-lbl">[TRANS]</span><span id="pcTransText">Waiting for OCR…</span>
+            </div>
+          </div>
+
+        </div><!-- .pipe-scroll -->
+
+        <div class="pipe-term" id="pipeTerm"></div>
+
+      </div><!-- .pipe-page -->
+    </div><!-- #tabPipeline -->
+
+  </div><!-- .tab-area -->
 
   <!-- ═══ STATS BAR ═══ -->
   <footer class="statsbar">
@@ -740,26 +1029,15 @@ const TRANS = [
 
 const ACTION_WORDS = ['ZAP!', 'POW!', 'SCAN!', 'OCR!', 'FOUND!', 'HIT!'];
 
-// Simulated manga panels (relative %)
 const PANELS = [
-  { top:'2%',  left:'2%',  w:'56%', h:'55%',
-    bubbles: [{ top:'12%', left:'52%', w:'42%', h:'26%', ti: 0 }] },
-  { top:'2%',  left:'59%', w:'39%', h:'28%',
-    bubbles: [{ top:'22%', left:'8%',  w:'84%', h:'55%', ti: 1 }] },
-  { top:'31%', left:'59%', w:'39%', h:'26%',
-    bubbles: [] },
-  { top:'58%', left:'2%',  w:'44%', h:'40%',
-    bubbles: [{ top:'18%', left:'8%',  w:'74%', h:'36%', ti: 4 }] },
-  { top:'58%', left:'47%', w:'51%', h:'40%',
-    bubbles: [{ top:'15%', left:'12%', w:'70%', h:'34%', ti: 6 }] },
+  { top:'2%',  left:'2%',  w:'56%', h:'55%', bubbles: [{ top:'12%', left:'52%', w:'42%', h:'26%', ti:0 }] },
+  { top:'2%',  left:'59%', w:'39%', h:'28%', bubbles: [{ top:'22%', left:'8%',  w:'84%', h:'55%', ti:1 }] },
+  { top:'31%', left:'59%', w:'39%', h:'26%', bubbles: [] },
+  { top:'58%', left:'2%',  w:'44%', h:'40%', bubbles: [{ top:'18%', left:'8%',  w:'74%', h:'36%', ti:4 }] },
+  { top:'58%', left:'47%', w:'51%', h:'40%', bubbles: [{ top:'15%', left:'12%', w:'70%', h:'34%', ti:6 }] },
 ];
 
-// ── BRIDGE (preenchido pelo QWebChannel quando rodando dentro do Qt) ──────────
 let BE = null;
-
-// ── PERSISTÊNCIA DE PRÉ-DEFINIÇÕES ────────────────────────────────────────────
-// As escolhas do usuário são gravadas no Python (settings.json) via bridge,
-// porque o QWebEngineProfile padrão é off-the-record (localStorage não persiste).
 const TOGGLE_IDS = ['tCuda', 'tCache', 'tScroll', 'tDebug', 'tAuto'];
 let pendingMonitor = null;
 
@@ -770,28 +1048,37 @@ function applyEngineUI(backend) {
   $('nllbConfig').style.display   = backend === 'nllb'   ? '' : 'none';
   $('transEngineTag').textContent =
     backend === 'ollama' ? ($('ollamaModel').value.trim() || 'OLLAMA')
-    : backend === 'nllb' ? 'NLLB-200'
-    : 'GOOGLE';
+    : backend === 'nllb' ? 'NLLB-200' : 'GOOGLE';
+
+  const sub = $('pcTransSub');
+  if (sub) sub.textContent =
+    backend === 'nllb'   ? 'MODEL: NLLB-200-DISTILLED-600M · LOCAL GPU'
+    : backend === 'ollama' ? 'MODEL: OLLAMA / ' + ($('ollamaModel').value.trim() || '—')
+    : 'API: GOOGLE TRANSLATE · CLOUD';
 }
 
 function togglesState() {
   return Object.fromEntries(TOGGLE_IDS.map(id => [id, $(id).classList.contains('on')]));
 }
 
+function applyOcrModeUI(mode) {
+  $('ocrModeSel').value = mode || 'en';
+  $('langSrc').textContent = mode === 'ja' ? 'JP' : 'EN';
+}
+
 function applySettings(s) {
   if (!s) return;
-  if (s.toggles) {
-    TOGGLE_IDS.forEach(id => { if (id in s.toggles) $(id).classList.toggle('on', !!s.toggles[id]); });
-  }
-  if (typeof s.debounce === 'number') {
-    $('dbSlider').value = s.debounce;
-    $('dbVal').textContent = s.debounce + 'ms';
-  }
+  if (s.toggles) TOGGLE_IDS.forEach(id => {
+    if (id in s.toggles) {
+      const on = !!s.toggles[id];
+      $(id).classList.toggle('on', on);
+      $(id).setAttribute('aria-checked', on);
+    }
+  });
+  if (typeof s.debounce === 'number') { $('dbSlider').value = s.debounce; $('dbVal').textContent = s.debounce + 'ms'; }
   if (s.ollamaModel) $('ollamaModel').value = s.ollamaModel;
-  if (s.engine) {
-    $('engineSel').value = s.engine;
-    applyEngineUI(s.engine);
-  }
+  if (s.engine) { $('engineSel').value = s.engine; applyEngineUI(s.engine); }
+  if (s.ocrMode) applyOcrModeUI(s.ocrMode);
   if (typeof s.monitor === 'number') {
     pendingMonitor = s.monitor;
     const sel = $('monitorSel');
@@ -801,51 +1088,149 @@ function applySettings(s) {
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
 const S = { running:false, bubbles:0, translated:0, cached:0, api:0, entries:0, tidx:0 };
-let dboxEls = [], simLoop = null;
+let dboxEls = [];
 
-// ── ELEMENTS ──────────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
-const startBtn   = $('startBtn');
-const startIco   = $('startIco');
-const startLbl   = $('startLbl');
-const statusPill = $('statusPill');
-const statusLabel= $('statusLabel');
-const liveTag    = $('liveTag');
-const scanLine   = $('scanLine');
-const idleState  = $('idleState');
-const mangaSim   = $('mangaSim');
-const fpsDsp     = $('fpsDsp');
-const logScroll  = $('logScroll');
-const logEmpty   = $('logEmpty');
-const logN       = $('logN');
-const actionWord = $('actionWord');
-const debounceBar= $('debounceBar');
-const viewport   = $('viewport');
-const pipeline   = $('pipeline');
+const startBtn    = $('startBtn');
+const startIco    = $('startIco');
+const startLbl    = $('startLbl');
+const statusPill  = $('statusPill');
+const statusLabel = $('statusLabel');
+const liveTag     = $('liveTag');
+const scanLine    = $('scanLine');
+const idleState   = $('idleState');
+const mangaSim    = $('mangaSim');
+const fpsDsp      = $('fpsDsp');
+const logScroll   = $('logScroll');
+const logEmpty    = $('logEmpty');
+const logN        = $('logN');
+const actionWord  = $('actionWord');
+const debounceBar = $('debounceBar');
+const viewport    = $('viewport');
+const pipeTerm    = $('pipeTerm');
 
-// ── PIPELINE ──────────────────────────────────────────────────────────────────
-const pSteps = pipeline.querySelectorAll('.pipe-step');
-const pJoins = pipeline.querySelectorAll('.pipe-join');
+// ── PIPELINE CARDS ────────────────────────────────────────────────────────────
+const PIPE_CARDS = ['pcCapture','pcPreproc','pcBubble','pcOcr','pcTrans'];
+const PIPE_CONNS = ['pcConn0','pcConn1','pcConn2','pcConn3'];
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-async function runPipeline() {
-  for (let i = 0; i < pSteps.length; i++) {
-    pSteps.forEach((s, si) => { s.classList.toggle('active', si===i); s.classList.toggle('done', si<i); });
-    pJoins.forEach((j, ji) => {
-      j.classList.toggle('lit', ji < i);
-      j.classList.toggle('act', ji === i - 1);
-    });
-    if (!S.running) return;
-    await sleep(280 + Math.random() * 180);
+function addTerminalLine(type, text) {
+  if (!pipeTerm) return;
+  const now = new Date();
+  const ts = [now.getHours(), now.getMinutes(), now.getSeconds()].map(n => String(n).padStart(2,'0')).join(':');
+  const prefix = { ok:'SUCCESS', warn:'WARN', err:'ERROR' }[type] || 'INFO';
+  const div = document.createElement('div');
+  div.className = 'term-line' + (type ? ' ' + type : '');
+  div.innerHTML = `<span class="term-ts">[${ts}]</span>${prefix}: ${text}`;
+  pipeTerm.appendChild(div);
+  pipeTerm.scrollTop = pipeTerm.scrollHeight;
+  while (pipeTerm.children.length > 80) pipeTerm.removeChild(pipeTerm.firstChild);
+}
+
+function updatePipeStep(i) {
+  const t = TRANS[S.tidx % TRANS.length];
+  switch (i) {
+    case 0: {
+      const lat = 5 + Math.floor(Math.random() * 15);
+      const el = $('pcCapLat'); if (el) el.textContent = lat;
+      addTerminalLine('', `Frame captured · ${lat}ms`);
+      break;
+    }
+    case 1: {
+      const lat = 25 + Math.floor(Math.random() * 35);
+      const el = $('pcPrepLat'); if (el) el.textContent = lat;
+      break;
+    }
+    case 2: {
+      const conf = (85 + Math.random() * 13).toFixed(1);
+      const lat  = 100 + Math.floor(Math.random() * 100);
+      const ce = $('pcBubConf'), le = $('pcBubLat');
+      if (ce) ce.textContent = conf + '%';
+      if (le) le.textContent = lat + 'ms';
+      // bubble thumbnails
+      const thumbs = $('pcBubThumbs');
+      if (thumbs) {
+        const n = 2 + Math.floor(Math.random() * 4);
+        thumbs.innerHTML = '';
+        for (let k = 0; k < n; k++) {
+          const d = document.createElement('div');
+          d.className = 'pc-thumb';
+          d.textContent = `B${k+1}`;
+          thumbs.appendChild(d);
+        }
+      }
+      addTerminalLine('ok', `${2 + Math.floor(Math.random()*4)} bubbles detected · conf ${conf}% · ${lat}ms`);
+      break;
+    }
+    case 3: {
+      const score = (6 + Math.random() * 3).toFixed(2);
+      const lat   = 200 + Math.floor(Math.random() * 200);
+      const se = $('pcOcrScore'), le = $('pcOcrLat'), te = $('pcOcrText');
+      if (se) se.textContent = score;
+      if (le) le.textContent = lat + 'ms';
+      if (te) te.textContent = `"${t.en}"`;
+      addTerminalLine('', `[OCR] "${t.en.substring(0,35)}${t.en.length > 35 ? '…' : ''}" · score ${score}`);
+      break;
+    }
+    case 4: {
+      const lat = 300 + Math.floor(Math.random() * 1000);
+      const le = $('pcTransLat'), te = $('pcTransText');
+      if (le) le.textContent = lat;
+      if (te) te.textContent = `"${t.pt}"`;
+      if (lat > 900) addTerminalLine('warn', `LLM latency spike (${(lat/1000).toFixed(1)}s) — local inference queueing.`);
+      else           addTerminalLine('ok', `[TRANS] "${t.pt}" · ${lat}ms`);
+      break;
+    }
   }
-  pSteps.forEach(s => { s.classList.remove('active'); s.classList.add('done'); });
-  pJoins.forEach(j => { j.classList.add('lit'); j.classList.remove('act'); });
+}
+
+async function runPipeline() {
+  for (let i = 0; i < PIPE_CARDS.length; i++) {
+    // mark previous steps done
+    PIPE_CARDS.slice(0, i).forEach((id, j) => {
+      const el = $(id); if (el) el.dataset.state = 'done';
+      const cn = $(PIPE_CONNS[j]); if (cn) { cn.classList.add('lit'); cn.classList.remove('act'); }
+    });
+    // mark current step active
+    const cur = $(PIPE_CARDS[i]); if (cur) cur.dataset.state = 'active';
+    const curConn = $(PIPE_CONNS[i]); if (curConn) { curConn.classList.remove('lit'); curConn.classList.add('act'); }
+
+    updatePipeStep(i);
+
+    if (!S.running) return;
+    await sleep(260 + Math.random() * 180);
+  }
+  // all done
+  PIPE_CARDS.forEach(id => { const el = $(id); if (el) el.dataset.state = 'done'; });
+  PIPE_CONNS.forEach(id => { const cn = $(id); if (cn) { cn.classList.add('lit'); cn.classList.remove('act'); } });
+  addTerminalLine('ok', 'Pipeline complete · overlay rendered.');
 }
 
 function resetPipeline() {
-  pSteps.forEach(s => s.classList.remove('active','done'));
-  pJoins.forEach(j => j.classList.remove('lit','act'));
+  PIPE_CARDS.forEach(id => { const el = $(id); if (el) el.dataset.state = ''; });
+  PIPE_CONNS.forEach(id => { const cn = $(id); if (cn) cn.classList.remove('lit','act'); });
+}
+
+function cancelPipeline() {
+  // Marca os cards ativos como cancelados, depois limpa
+  PIPE_CARDS.forEach(id => {
+    const el = $(id);
+    if (!el) return;
+    if (el.dataset.state === 'active' || el.dataset.state === 'done') {
+      el.dataset.state = 'cancelled';
+      const preview = el.querySelector('.pc-preview');
+      if (preview) {
+        const lbl = preview.querySelector('.pc-preview-lbl');
+        if (lbl) lbl.textContent = '[CANCELLED]';
+      }
+    }
+  });
+  PIPE_CONNS.forEach(id => { const cn = $(id); if (cn) cn.classList.remove('lit','act'); });
+  addTerminalLine('warn', 'Scroll detectado — pipeline cancelado mid-run.');
+  setStatus('IDLE', '');
+  // Reset após a animação de flash (~1.2s)
+  setTimeout(resetPipeline, 1300);
 }
 
 // ── MANGA SIM ────────────────────────────────────────────────────────────────
@@ -854,27 +1239,17 @@ function buildSim() {
   PANELS.forEach((p, pi) => {
     const div = document.createElement('div');
     div.style.cssText = `position:absolute;top:${p.top};left:${p.left};width:${p.w};height:${p.h};background:#161616;border:1px solid #282828;overflow:hidden;`;
-
-    // halftone
     const ht = document.createElement('div');
     ht.style.cssText = 'position:absolute;inset:0;background-image:radial-gradient(circle,#222 1px,transparent 1px);background-size:6px 6px;opacity:.45;';
     div.appendChild(ht);
-
-    // silhouette for large panels
-    if (pi === 0) {
-      div.innerHTML += `<svg style="position:absolute;bottom:0;left:18%;width:55%;height:85%;opacity:.12;" viewBox="0 0 100 140"><ellipse cx="50" cy="28" rx="18" ry="20" fill="#fff"/><rect x="28" y="53" width="44" height="87" rx="5" fill="#fff"/><rect x="12" y="57" width="16" height="58" rx="4" fill="#fff"/><rect x="72" y="57" width="16" height="58" rx="4" fill="#fff"/></svg>`;
-    } else if (pi === 3) {
-      div.innerHTML += `<svg style="position:absolute;bottom:0;right:8%;width:42%;height:90%;opacity:.10;" viewBox="0 0 100 140"><ellipse cx="50" cy="24" rx="16" ry="18" fill="#fff"/><rect x="30" y="46" width="40" height="94" rx="5" fill="#fff"/><rect x="14" y="50" width="16" height="62" rx="4" fill="#fff"/><rect x="70" y="50" width="16" height="62" rx="4" fill="#fff"/></svg>`;
-    }
-
-    // speech bubbles
+    if (pi === 0) div.innerHTML += `<svg style="position:absolute;bottom:0;left:18%;width:55%;height:85%;opacity:.12;" viewBox="0 0 100 140"><ellipse cx="50" cy="28" rx="18" ry="20" fill="#fff"/><rect x="28" y="53" width="44" height="87" rx="5" fill="#fff"/><rect x="12" y="57" width="16" height="58" rx="4" fill="#fff"/><rect x="72" y="57" width="16" height="58" rx="4" fill="#fff"/></svg>`;
+    else if (pi === 3) div.innerHTML += `<svg style="position:absolute;bottom:0;right:8%;width:42%;height:90%;opacity:.10;" viewBox="0 0 100 140"><ellipse cx="50" cy="24" rx="16" ry="18" fill="#fff"/><rect x="30" y="46" width="40" height="94" rx="5" fill="#fff"/><rect x="14" y="50" width="16" height="62" rx="4" fill="#fff"/><rect x="70" y="50" width="16" height="62" rx="4" fill="#fff"/></svg>`;
     p.bubbles.forEach(b => {
       const bel = document.createElement('div');
       bel.style.cssText = `position:absolute;top:${b.top};left:${b.left};width:${b.w};height:${b.h};background:white;border:1.5px solid #111;border-radius:40%;display:flex;align-items:center;justify-content:center;text-align:center;padding:6px;font-family:'IBM Plex Mono',monospace;font-size:8px;color:#111;line-height:1.35;font-style:italic;`;
       bel.textContent = TRANS[b.ti].en;
       div.appendChild(bel);
     });
-
     mangaSim.appendChild(div);
   });
 }
@@ -890,17 +1265,14 @@ const DBOX_POSITIONS = [
 function addDetectBoxes(showTrans) {
   dboxEls.forEach(e => e.remove());
   dboxEls = [];
-
   DBOX_POSITIONS.forEach(p => {
     const box = document.createElement('div');
     box.className = 'dbox';
     box.style.cssText = `top:${p.top};left:${p.left};width:${p.w};height:${p.h};`;
-
     const lbl = document.createElement('div');
     lbl.className = 'dbox-label';
     lbl.textContent = `BUBBLE · ${p.conf}`;
     box.appendChild(lbl);
-
     if (showTrans) {
       const ov = document.createElement('div');
       ov.className = 'trans-overlay';
@@ -912,7 +1284,6 @@ function addDetectBoxes(showTrans) {
       conf.textContent = p.conf;
       box.appendChild(conf);
     }
-
     viewport.appendChild(box);
     dboxEls.push(box);
   });
@@ -962,7 +1333,6 @@ function popAction(word) {
   setTimeout(() => actionWord.classList.remove('pop'), 700);
 }
 
-// ── STATUS UPDATE ─────────────────────────────────────────────────────────────
 function setStatus(label, cls) {
   statusPill.className = 'status-pill ' + cls;
   statusLabel.textContent = label;
@@ -971,10 +1341,8 @@ function setStatus(label, cls) {
 // ── MAIN SIM LOOP ────────────────────────────────────────────────────────────
 async function simRun() {
   let fpsCnt = 0, lastT = Date.now();
-  let phase = 0; // 0=scan, 1=translate
 
   while (S.running) {
-    // FPS counter
     fpsCnt++;
     const now = Date.now();
     if (now - lastT > 1000) {
@@ -984,22 +1352,31 @@ async function simRun() {
       fpsCnt = 0; lastT = now;
     }
 
-    // Bubbles stat
     const nb = 3 + Math.floor(Math.random() * 3);
     S.bubbles += nb;
     $('sBubbles').textContent = S.bubbles;
 
-    // Status: scanning
     setStatus('SCANNING', 'is-scanning');
-
-    // Show scan boxes (no translation yet)
     addDetectBoxes(false);
 
-    // Run pipeline
-    await runPipeline();
-    if (!S.running) break;
+    // Simula scroll mid-pipeline com 20% de chance
+    let wasCancelled = false;
+    const pipeRace = Promise.race([
+      runPipeline().then(() => 'done'),
+      sleep(400 + Math.random() * 800).then(() => {
+        if (Math.random() < 0.20) { cancelPipeline(); return 'cancelled'; }
+        return 'done';
+      }),
+    ]);
+    const raceResult = await pipeRace;
+    wasCancelled = raceResult === 'cancelled';
 
-    // Debounce bar flash
+    if (!S.running) break;
+    if (wasCancelled) {
+      await sleep(800 + Math.random() * 600);
+      continue;
+    }
+
     debounceBar.style.width = '0%';
     const dbMs = parseInt($('dbSlider').value);
     const steps = 20;
@@ -1008,24 +1385,20 @@ async function simRun() {
       await sleep(dbMs / steps);
     }
     debounceBar.style.width = '0%';
-
     if (!S.running) break;
 
-    // Translation phase
     setStatus('TRANSLATING', 'is-scanning');
     addDetectBoxes(true);
 
     const t = TRANS[S.tidx % TRANS.length];
     S.tidx++;
     const isCached = Math.random() < 0.28;
-
     if (isCached) { S.cached++; $('sCached').textContent = S.cached; }
     else          { S.api++;    $('sApi').textContent = S.api; }
     S.translated++;
     $('sTranslated').textContent = S.translated;
 
     addEntry(t, isCached);
-
     if (Math.random() < 0.35) popAction(ACTION_WORDS[Math.floor(Math.random() * ACTION_WORDS.length)]);
 
     setStatus('ACTIVE', 'is-active');
@@ -1043,11 +1416,13 @@ function startScan() {
   liveTag.classList.add('on');
   idleState.classList.add('out');
   scanLine.classList.add('on');
+  $('pipeLiveBadge').classList.add('on');
   buildSim();
   mangaSim.classList.add('vis');
   addDetectBoxes(false);
   popAction('START!');
-  if (!BE) simRun();   // simulação só quando não há backend Python
+  addTerminalLine('ok', 'Pipeline started. Node 0-4 operational.');
+  if (!BE) simRun();
 }
 
 function stopScan() {
@@ -1059,11 +1434,13 @@ function stopScan() {
   liveTag.classList.remove('on');
   idleState.classList.remove('out');
   scanLine.classList.remove('on');
+  $('pipeLiveBadge').classList.remove('on');
   mangaSim.classList.remove('vis');
   fpsDsp.textContent = '— FPS';
   $('sFps').textContent = '—';
   dboxEls.forEach(e => e.remove()); dboxEls = [];
   resetPipeline();
+  addTerminalLine('warn', 'Pipeline stopped by user.');
 }
 
 startBtn.addEventListener('click', () => {
@@ -1071,15 +1448,34 @@ startBtn.addEventListener('click', () => {
   else           { startScan(); if (BE) BE.start(); }
 });
 
+// ── TAB SWITCHING ─────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', function () {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    this.classList.add('active');
+    const tabId = 'tab' + this.dataset.tab[0].toUpperCase() + this.dataset.tab.slice(1);
+    $(tabId).classList.add('active');
+  });
+});
+
 // ── TOGGLES ───────────────────────────────────────────────────────────────────
-TOGGLE_IDS.forEach(id => $(id).addEventListener('click', () => {
-  $(id).classList.toggle('on');
+function flipToggle(id) {
+  const el = $(id);
+  el.classList.toggle('on');
+  el.setAttribute('aria-checked', el.classList.contains('on'));
   saveSetting({ toggles: togglesState() });
-}));
+}
+TOGGLE_IDS.forEach(id => {
+  $(id).addEventListener('click', () => flipToggle(id));
+  $(id).addEventListener('keydown', (e) => {
+    if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); flipToggle(id); }
+  });
+});
 
 // ── DEBOUNCE SLIDER ───────────────────────────────────────────────────────────
-$('dbSlider').addEventListener('input', function() { $('dbVal').textContent = this.value + 'ms'; });
-$('dbSlider').addEventListener('change', function() { saveSetting({ debounce: parseInt(this.value, 10) }); });
+$('dbSlider').addEventListener('input',  function () { $('dbVal').textContent = this.value + 'ms'; });
+$('dbSlider').addEventListener('change', function () { saveSetting({ debounce: parseInt(this.value, 10) }); });
 
 // ── CLEAR ─────────────────────────────────────────────────────────────────────
 $('clearBtn').addEventListener('click', () => {
@@ -1090,14 +1486,21 @@ $('clearBtn').addEventListener('click', () => {
 // ── REGION SELECTOR ───────────────────────────────────────────────────────────
 $('regionBtn').addEventListener('click', () => {
   if (BE) {
-    BE.selectRegion();   // abre seletor nativo PyQt6
+    BE.selectRegion();
   } else {
-    // simulação no browser
     $('rX').textContent = Math.floor(Math.random() * 200);
     $('rY').textContent = Math.floor(Math.random() * 100);
     $('rW').textContent = 800 + Math.floor(Math.random() * 480);
     $('rH').textContent = 600 + Math.floor(Math.random() * 360);
   }
+});
+
+// ── SOURCE LANG / OCR MODE ────────────────────────────────────────────────────
+$('ocrModeSel').addEventListener('change', function () {
+  const mode = this.value;
+  applyOcrModeUI(mode);
+  if (BE) BE.setOcrMode(mode);
+  saveSetting({ ocrMode: mode });
 });
 
 // ── TRANSLATION ENGINE ────────────────────────────────────────────────────────
@@ -1149,7 +1552,6 @@ $('testOllamaBtn').addEventListener('click', function () {
   statusEl.textContent = 'Connecting…';
   statusEl.className = 'ollama-status';
   $('testOllamaBtn').classList.add('testing');
-
   const model = $('ollamaModel').value.trim();
   if (BE) {
     if (model) BE.setOllamaModel(model);
@@ -1161,77 +1563,63 @@ $('testOllamaBtn').addEventListener('click', function () {
   }
 });
 
-// ── QWEBCHANNEL — conecta ao backend Python quando rodando dentro do Qt ────────
+// ── QWEBCHANNEL ───────────────────────────────────────────────────────────────
 window.addEventListener('load', function () {
-  // qt.webChannelTransport é injetado automaticamente pelo Qt quando
-  // QWebChannel está configurado. Ausente no browser normal.
   if (typeof qt === 'undefined') return;
 
   new QWebChannel(qt.webChannelTransport, function (channel) {
     BE = channel.objects.backend;
 
-    // status vindo do Python → atualiza só o texto (classe CSS fica pelo JS)
-    BE.statusChanged.connect(function (text) {
-      statusLabel.textContent = text;
-    });
+    BE.statusChanged.connect(function (text) { statusLabel.textContent = text; });
 
-    // coordenadas da região selecionada no PyQt6
     BE.regionChanged.connect(function (x, y, w, h) {
-      $('rX').textContent = x;
-      $('rY').textContent = y;
-      $('rW').textContent = w;
-      $('rH').textContent = h;
+      $('rX').textContent = x; $('rY').textContent = y;
+      $('rW').textContent = w; $('rH').textContent = h;
+      $('pcCapSub').textContent = `SOURCE: ${w}×${h} · DESKTOP CAPTURE`;
     });
 
-    // tradução individual → adiciona ao log
     BE.translationAdded.connect(function (json) {
       const t = JSON.parse(json);
-      S.translated++;
-      $('sTranslated').textContent = S.translated;
+      S.translated++; $('sTranslated').textContent = S.translated;
       if (t.cached) { S.cached++; $('sCached').textContent = S.cached; }
       else          { S.api++;    $('sApi').textContent = S.api; }
       addEntry({ en: t.en, pt: t.pt, conf: 0.95, engine: t.engine || 'google' }, t.cached);
       popAction(ACTION_WORDS[Math.floor(Math.random() * ACTION_WORDS.length)]);
     });
 
-    // OCR iniciou → anima pipeline
     BE.processingStarted.connect(function () {
-      S.bubbles++;
-      $('sBubbles').textContent = S.bubbles;
+      S.bubbles++; $('sBubbles').textContent = S.bubbles;
       setStatus('SCANNING', 'is-scanning');
       resetPipeline();
-      runPipeline();   // animação one-shot (não loop)
+      runPipeline();
     });
 
-    // pipeline concluído → marca tudo verde
+    BE.pipelineCancelled.connect(function () {
+      cancelPipeline();
+    });
+
     BE.pipelineDone.connect(function () {
-      pSteps.forEach(s => { s.classList.remove('active'); s.classList.add('done'); });
-      pJoins.forEach(j => { j.classList.add('lit'); j.classList.remove('act'); });
+      PIPE_CARDS.forEach(id => { const el = $(id); if (el) el.dataset.state = 'done'; });
+      PIPE_CONNS.forEach(id => { const cn = $(id); if (cn) { cn.classList.add('lit'); cn.classList.remove('act'); } });
       setStatus('ACTIVE', 'is-active');
     });
 
-    // resultado do teste de conexão com Ollama
     BE.ollamaTestResult.connect(function (ok, msg) {
-      const statusEl = $('ollamaStatus');
       $('testOllamaBtn').classList.remove('testing');
-      statusEl.textContent = msg;
-      statusEl.className = 'ollama-status ' + (ok ? 'ok' : 'err');
+      const el = $('ollamaStatus');
+      el.textContent = msg; el.className = 'ollama-status ' + (ok ? 'ok' : 'err');
     });
 
-    // resultado do teste/carga do NLLB-200
     BE.nllbTestResult.connect(function (ok, msg) {
-      const statusEl = $('nllbStatus');
       $('testNllbBtn').classList.remove('testing');
-      statusEl.textContent = msg;
-      statusEl.className = 'ollama-status ' + (ok ? 'ok' : 'err');
+      const el = $('nllbStatus');
+      el.textContent = msg; el.className = 'ollama-status ' + (ok ? 'ok' : 'err');
     });
 
-    // restaura as pré-definições salvas (engine, modelo, debounce, toggles, monitor)
     BE.getSettings(function (json) {
       try { applySettings(JSON.parse(json)); } catch (e) {}
     });
 
-    // popula seletor de monitor (oculto em monitor único)
     BE.getMonitors(function (json) {
       const monitors = JSON.parse(json);
       if (monitors.length <= 1) return;
@@ -1243,7 +1631,7 @@ window.addEventListener('load', function () {
         sel.appendChild(opt);
       });
       if (pendingMonitor != null) { sel.value = pendingMonitor; pendingMonitor = null; }
-      BE.setMonitor(parseInt(sel.value, 10));  // sincroniza o backend com o valor restaurado
+      BE.setMonitor(parseInt(sel.value, 10));
       sel.style.display = '';
       sel.addEventListener('change', function () {
         BE.setMonitor(parseInt(sel.value, 10));
@@ -1253,8 +1641,8 @@ window.addEventListener('load', function () {
   });
 });
 
-// Initial sim build (invisible)
 buildSim();
+addTerminalLine('', 'System ready. Awaiting START command.');
 </script>
 </body>
 </html>

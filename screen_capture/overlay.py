@@ -127,7 +127,14 @@ class OverlayWindow(QWidget):
                 painter.drawImage(rect, label.bg_image)
             else:
                 # Fallback: retângulo arredondado opaco com a cor amostrada.
+                # Sombra suave por baixo — sem isso o retângulo "flutua" sem
+                # relação com a arte ao redor e parece colado por cima.
                 radius = min(rect.width(), rect.height()) * 0.22
+                shadow_rect = QRectF(rect).translated(0, 3).adjusted(2, 2, 2, 2)
+                shadow_path = QPainterPath()
+                shadow_path.addRoundedRect(shadow_rect, radius, radius)
+                painter.fillPath(shadow_path, QColor(0, 0, 0, 70))
+
                 path = QPainterPath()
                 path.addRoundedRect(QRectF(rect), radius, radius)
                 painter.fillPath(path, QColor(r, g, b))
@@ -150,7 +157,6 @@ class OverlayWindow(QWidget):
             font = QFont("Arial Black", font_size)
             font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, -0.5)
             painter.setFont(font)
-            painter.setPen(text_color)
 
             # Ancora o texto verticalmente no centroide da tinta original (quando
             # disponível): centraliza nesse y mantendo a simetria dentro de `avail`.
@@ -162,11 +168,23 @@ class OverlayWindow(QWidget):
                 if half > 6:
                     draw_rect = QRect(avail.left(), cy - half, avail.width(), 2 * half)
 
-            painter.drawText(
-                draw_rect,
-                Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap,
-                display,
-            )
+            flags = Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap
+
+            # Contorno estilo lettering: garante legibilidade mesmo quando a cor
+            # de fundo amostrada (média do balão) não bate com o que fica embaixo
+            # do texto — comum em balões com textura/arte residual do inpainting.
+            outline_color = QColor(0, 0, 0) if is_dark else QColor(255, 255, 255)
+            outline_w = max(1, round(font_size / 9))
+            painter.setPen(outline_color)
+            for dx, dy in (
+                (-outline_w, 0), (outline_w, 0), (0, -outline_w), (0, outline_w),
+                (-outline_w, -outline_w), (outline_w, -outline_w),
+                (-outline_w, outline_w), (outline_w, outline_w),
+            ):
+                painter.drawText(draw_rect.translated(dx, dy), flags, display)
+
+            painter.setPen(text_color)
+            painter.drawText(draw_rect, flags, display)
 
 
 def build_labels(
