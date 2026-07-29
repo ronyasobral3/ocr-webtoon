@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
@@ -21,7 +22,7 @@ from .bubble_detector import BubbleDetector
 from .capture import ScreenCapture
 from .inpaint import inpaint_text
 from .motion_detector import MotionDetector
-from .ocr_engine import OCREngine
+from .ocr_engine import MangaOCREngine, OCREngine
 from .overlay import OverlayWindow, build_labels
 from .settings import Settings
 from .translator import Translator
@@ -31,35 +32,45 @@ _CAPTURE_INTERVAL = 0.05  # ~20 fps
 
 
 class ProcessingThread(QThread):
-    labels_ready      = pyqtSignal(list)
-    status_update     = pyqtSignal(str)
-    detections_ready  = pyqtSignal(list)   # [{text, translated_text, ...}]
+    labels_ready       = pyqtSignal(list)
+    status_update      = pyqtSignal(str)
+    detections_ready   = pyqtSignal(list)   # [{text, translated_text, ...}]
     processing_started = pyqtSignal()
+    pipeline_cancelled = pyqtSignal()        # scroll detectado durante OCR
 
-    def __init__(self, region: dict, translator: Translator, debounce_ms: int = 300):
+    def __init__(self, region: dict, translator: Translator, debounce_ms: int = 300,
+                 ocr_mode: str = "en"):
         super().__init__()
         self._region = region
         self._translator = translator
         self._debounce_s = max(0.05, debounce_ms / 1000.0)
+        self._ocr_mode = ocr_mode
         self._running = True
+        self._cancel = threading.Event()
 
     def run(self) -> None:
         self.status_update.emit("Carregando modelo de detecção...")
         capture = ScreenCapture(self._region)
         motion = MotionDetector(debounce=self._debounce_s)
         detector = BubbleDetector()
-        ocr = OCREngine()
-        mode = "YOLOv8" if detector.using_yolo else "OpenCV"
+        if self._ocr_mode == "ja":
+            ocr = MangaOCREngine()
+        elif self._ocr_mode == "manga_en":
+            ocr = OCREngine(force_extra_passes=True)
+        else:
+            ocr = OCREngine()
+        mode = "MangaOCR" if self._ocr_mode == "ja" else ("YOLOv8" if detector.using_yolo else "OpenCV")
         self.status_update.emit(f"OCR em execução ({mode})...")
         translator = self._translator
-
         origin = (self._region["left"], self._region["top"])
 
         already_processed = False
-        motion_frames = 0  # frames consecutivos de movimento detectado
-        # A overlay aparecendo gera 1-2 frames de movimento; rolagem real gera muitos.
-        # Só resetamos após _RESET_FRAMES frames consecutivos para evitar loop de feedback.
-        _RESET_FRAMES = 6
+        motion_frames = 0
+        motion_start_t = 0.0
+        # Repaints de UI (overlay, dashboard) causam ~100-200ms de movimento detectado.
+        # Scroll real do usuário dura 400ms+. Usamos duração mínima, não contagem de
+        # frames, para distinguir os dois casos e evitar o loop de feedback.
+        _SCROLL_RESET_S = 0.40
 
         with capture:
             while self._running:
@@ -67,122 +78,159 @@ class ProcessingThread(QThread):
                 is_stable = motion.update(frame)
 
                 if not is_stable:
+                    if motion_frames == 0:
+                        motion_start_t = time.monotonic()
                     motion_frames += 1
-                    if already_processed and motion_frames >= _RESET_FRAMES:
+                    if already_processed and (time.monotonic() - motion_start_t) >= _SCROLL_RESET_S:
+                        # Movimento sustentado ≥ 400ms → scroll real detectado.
+                        # Cancela pipeline em andamento, limpa overlay e reseta estado.
+                        self._cancel.set()
                         self.labels_ready.emit([])
                         already_processed = False
                         motion_frames = 0
+                        motion_start_t = 0.0
                     time.sleep(_CAPTURE_INTERVAL)
                     continue
 
                 motion_frames = 0
+                motion_start_t = 0.0
 
                 if already_processed:
                     # Tela continua parada — OCR já foi feito, não repete
                     time.sleep(_CAPTURE_INTERVAL)
                     continue
 
-                # Transição movimento → estável: executa OCR uma única vez
+                # Transição movimento → estável: dispara pipeline uma única vez.
+                # Roda em thread daemon para que o loop principal continue capturando
+                # frames e detectando movimento mesmo durante OCR/tradução.
                 already_processed = True
+                self._cancel.clear()
                 self.processing_started.emit()
                 self.status_update.emit("Processando...")
-                t0 = time.perf_counter()
 
-                bubbles = detector.crop_bubbles(frame)
-                t_detect = time.perf_counter()
-                logging.debug("Detecção de balões: %.3fs — %d balão(ões)", t_detect - t0, len(bubbles))
+                frame_snap = frame.copy()  # snapshot antes de ceder o loop
 
-                # Google traduz cada texto de forma independente e é I/O-bound:
-                # encadeamos OCR→tradução por balão para sobrepor a latência de
-                # rede de um balão com o OCR dos demais. Ollama precisa de todos
-                # os textos num único prompt (contexto), então mantém duas fases.
-                overlap = translator.backend_name == "google"
+                def _worker(f=frame_snap, det=detector, eng=ocr, tr=translator, orig=origin):
+                    self._do_pipeline(f, det, eng, tr, orig)
 
-                def _run_ocr(item: tuple) -> tuple | None:
-                    box, crop, bg_color = item
-                    try:
-                        t_ocr = time.perf_counter()
-                        lines = ocr.extract(crop)
-                        logging.debug("  OCR (balão %s): %.3fs — %d linha(s)", box, time.perf_counter() - t_ocr, len(lines))
-                        if not lines:
-                            return None
-                        # Ordena top→bottom pelo topo do bounding box de cada linha.
-                        # RapidOCR não garante ordem de leitura; sem sort o texto
-                        # fica embaralhado antes de chegar ao tradutor.
-                        lines_sorted = sorted(lines, key=lambda d: min(pt[1] for pt in d["box"]))
-                        logging.debug("  OCR linhas: %s", [d['text'] for d in lines_sorted])
-                        full_text = " ".join(d["text"] for d in lines_sorted)
-                        # Reescreve o balão: remove o texto original por inpainting
-                        # para o overlay redesenhar só a tradução sobre o fundo real.
-                        # `pack` = (imagem_limpa, centroide_do_texto) ou None.
-                        pack = inpaint_text(crop)
-                        return (box, full_text, bg_color, pack)
-                    except Exception as exc:
-                        logging.warning("  OCR falhou para balão %s: %s", box, exc)
-                        return None
+                threading.Thread(target=_worker, daemon=True).start()
 
-                def _run_pipeline(item: tuple) -> tuple | None:
-                    res = _run_ocr(item)
-                    if res is None or not overlap:
-                        return res
-                    box, full_text, bg_color, pack = res
-                    # Consulta o cache ANTES de traduzir (translate_one popula o cache).
-                    cached = translator.is_cached(full_text)
-                    return (box, full_text, bg_color, pack, translator.translate_one(full_text), cached)
-
-                # OCR (+ tradução, no modo overlap) em paralelo por balão.
-                _workers = max(4, os.cpu_count() or 4)
-                t_tr = time.perf_counter()
-                with ThreadPoolExecutor(max_workers=_workers) as pool:
-                    results = [r for r in pool.map(_run_pipeline, bubbles) if r is not None]
-
-                if overlap:
-                    ocr_results = [(b, t, bg, pk) for (b, t, bg, pk, _tr, _c) in results]
-                    translated_texts = [tr for (_b, _t, _bg, _pk, tr, _c) in results]
-                    cached_flags = [c for (_b, _t, _bg, _pk, _tr, c) in results]
-                    logging.debug("OCR+tradução (overlap): %.3fs — %d texto(s)", time.perf_counter() - t_tr, len(results))
-                else:
-                    ocr_results = results
-                    texts = [full_text for _, full_text, _, _ in ocr_results]
-                    # Consulta o cache ANTES de traduzir (translate_many popula o cache).
-                    cached_flags = [translator.is_cached(t) for t in texts]
-                    translated_texts = translator.translate_many(texts)
-                    logging.debug("Tradução batch: %.3fs — %d texto(s)", time.perf_counter() - t_tr, len(texts))
-
-                logging.debug("OCR: %d/%d balão(ões) com texto", len(ocr_results), len(bubbles))
-
-                engine = translator.backend_name
-                detections = []
-                for (box, full_text, bg_color, pack), translated, cached in zip(ocr_results, translated_texts, cached_flags):
-                    x1, y1, x2, y2 = box
-                    clean_img = pack[0] if pack else None
-                    text_center = pack[1] if pack else None
-                    # Inpaint OK: usa a cor real do interior do balão (não os cantos
-                    # do crop, que podem cair fora do oval e inverter o contraste).
-                    if pack:
-                        bg_color = pack[2]
-                    detections.append({
-                        "text": full_text,
-                        "translated_text": translated,
-                        "box": [[x1, y1], [x2, y1], [x2, y2], [x1, y2]],
-                        "bg_color": bg_color,
-                        "clean_image": clean_img,
-                        "text_center": text_center,
-                        "cached": cached,
-                        "engine": engine,
-                    })
-
-                t_total = time.perf_counter()
-                logging.debug("Total do pipeline: %.3fs — %d texto(s)", t_total - t0, len(detections))
-
-                self.detections_ready.emit(detections)
-                self.labels_ready.emit(build_labels(detections, origin))
-                status = f"OCR em execução — {len(detections)} texto(s) detectado(s)."
-                self.status_update.emit(status)
                 time.sleep(_CAPTURE_INTERVAL)
+
+    def _do_pipeline(
+        self,
+        frame,
+        detector: BubbleDetector,
+        ocr,
+        translator: Translator,
+        origin: tuple,
+    ) -> None:
+        """Executa detecção → OCR → tradução em thread daemon.
+
+        Verifica `self._cancel` em vários pontos; se setado (scroll detectado),
+        aborta sem emitir resultados e dispara `pipeline_cancelled`.
+        """
+        cancel = self._cancel
+        t0 = time.perf_counter()
+
+        if cancel.is_set():
+            self.pipeline_cancelled.emit()
+            return
+
+        bubbles = detector.crop_bubbles(frame)
+        logging.debug("Detecção de balões: %.3fs — %d balão(ões)", time.perf_counter() - t0, len(bubbles))
+
+        if cancel.is_set():
+            self.pipeline_cancelled.emit()
+            return
+
+        overlap = translator.backend_name == "google"
+
+        def _run_ocr(item: tuple) -> tuple | None:
+            if cancel.is_set():
+                return None
+            box, crop, bg_color = item
+            try:
+                t_ocr = time.perf_counter()
+                lines = ocr.extract(crop)
+                logging.debug("  OCR (balão %s): %.3fs — %d linha(s)", box, time.perf_counter() - t_ocr, len(lines))
+                if not lines or cancel.is_set():
+                    return None
+                lines_sorted = sorted(lines, key=lambda d: min(pt[1] for pt in d["box"]))
+                logging.debug("  OCR linhas: %s", [d['text'] for d in lines_sorted])
+                full_text = " ".join(d["text"] for d in lines_sorted)
+                if cancel.is_set():
+                    return None
+                pack = inpaint_text(crop)
+                return (box, full_text, bg_color, pack)
+            except Exception as exc:
+                logging.warning("  OCR falhou para balão %s: %s", box, exc)
+                return None
+
+        def _run_pipeline_item(item: tuple) -> tuple | None:
+            res = _run_ocr(item)
+            if res is None or not overlap or cancel.is_set():
+                return res
+            box, full_text, bg_color, pack = res
+            cached = translator.is_cached(full_text)
+            return (box, full_text, bg_color, pack, translator.translate_one(full_text), cached)
+
+        _workers = max(4, os.cpu_count() or 4)
+        t_tr = time.perf_counter()
+        with ThreadPoolExecutor(max_workers=_workers) as pool:
+            results = [r for r in pool.map(_run_pipeline_item, bubbles) if r is not None]
+
+        if cancel.is_set():
+            self.pipeline_cancelled.emit()
+            return
+
+        if overlap:
+            ocr_results     = [(b, t, bg, pk) for (b, t, bg, pk, _tr, _c) in results]
+            translated_texts = [tr for (_b, _t, _bg, _pk, tr, _c) in results]
+            cached_flags    = [c  for (_b, _t, _bg, _pk, _tr, c) in results]
+            logging.debug("OCR+tradução (overlap): %.3fs — %d texto(s)", time.perf_counter() - t_tr, len(results))
+        else:
+            ocr_results = results
+            texts = [ft for _, ft, _, _ in ocr_results]
+            cached_flags = [translator.is_cached(t) for t in texts]
+            translated_texts = translator.translate_many(texts)
+            logging.debug("Tradução batch: %.3fs — %d texto(s)", time.perf_counter() - t_tr, len(texts))
+
+        if cancel.is_set():
+            self.pipeline_cancelled.emit()
+            return
+
+        logging.debug("OCR: %d/%d balão(ões) com texto", len(ocr_results), len(bubbles))
+
+        engine = translator.backend_name
+        detections = []
+        for (box, full_text, bg_color, pack), translated, cached in zip(
+            ocr_results, translated_texts, cached_flags
+        ):
+            x1, y1, x2, y2 = box
+            clean_img   = pack[0] if pack else None
+            text_center = pack[1] if pack else None
+            if pack:
+                bg_color = pack[2]
+            detections.append({
+                "text":           full_text,
+                "translated_text": translated,
+                "box":            [[x1, y1], [x2, y1], [x2, y2], [x1, y2]],
+                "bg_color":       bg_color,
+                "clean_image":    clean_img,
+                "text_center":    text_center,
+                "cached":         cached,
+                "engine":         engine,
+            })
+
+        logging.debug("Total do pipeline: %.3fs — %d texto(s)", time.perf_counter() - t0, len(detections))
+        self.detections_ready.emit(detections)
+        self.labels_ready.emit(build_labels(detections, origin))
+        self.status_update.emit(f"OCR em execução — {len(detections)} texto(s) detectado(s).")
 
     def stop(self) -> None:
         self._running = False
+        self._cancel.set()   # encerra pipeline em andamento se houver
         self.wait()
 
 
@@ -201,6 +249,8 @@ def main() -> None:
         translator.set_ollama_model(saved["ollamaModel"])
     if saved.get("engine"):
         translator.set_backend(saved["engine"])
+    if saved.get("ocrMode"):
+        translator.set_ocr_mode(saved["ocrMode"])
 
     worker: ProcessingThread | None = None
 
@@ -217,10 +267,12 @@ def main() -> None:
         overlay.reposition(target_screen)
 
         debounce_ms = int(settings.get_all().get("debounce", 300))
-        worker = ProcessingThread(region, translator, debounce_ms)
+        ocr_mode = settings.get_all().get("ocrMode", "en")
+        worker = ProcessingThread(region, translator, debounce_ms, ocr_mode)
         worker.labels_ready.connect(overlay.update_labels)
         worker.status_update.connect(panel.set_status)
         worker.processing_started.connect(panel.bridge.processingStarted)
+        worker.pipeline_cancelled.connect(panel.bridge.pipelineCancelled)
         worker.detections_ready.connect(panel.notify_detections)
         worker.start()
 
@@ -243,6 +295,9 @@ def main() -> None:
 
     app.screenRemoved.connect(on_screen_removed)
 
+    def on_set_ocr_mode(mode: str) -> None:
+        translator.set_ocr_mode(mode)
+
     def on_set_backend(backend: str) -> None:
         translator.set_backend(backend)
 
@@ -257,6 +312,7 @@ def main() -> None:
         ok, msg = translator.test_nllb()
         panel.bridge.nllbTestResult.emit(ok, msg)
 
+    panel.bridge._set_ocr_mode_cb     = on_set_ocr_mode
     panel.bridge._set_backend_cb      = on_set_backend
     panel.bridge._set_ollama_model_cb = on_set_ollama_model
     panel.bridge._test_ollama_cb      = on_test_ollama

@@ -42,13 +42,14 @@ class BackendBridge(QObject):
     """
 
     # Python → JS
-    statusChanged     = pyqtSignal(str)
-    translationAdded  = pyqtSignal(str)   # JSON {en, pt, cached}
-    processingStarted = pyqtSignal()
-    pipelineDone      = pyqtSignal()
-    regionChanged     = pyqtSignal(int, int, int, int)  # left, top, w, h
-    ollamaTestResult  = pyqtSignal(bool, str)           # ok, message
-    nllbTestResult    = pyqtSignal(bool, str)           # ok, message
+    statusChanged      = pyqtSignal(str)
+    translationAdded   = pyqtSignal(str)   # JSON {en, pt, cached}
+    processingStarted  = pyqtSignal()
+    pipelineDone       = pyqtSignal()
+    pipelineCancelled  = pyqtSignal()      # movimento detectado durante OCR
+    regionChanged      = pyqtSignal(int, int, int, int)  # left, top, w, h
+    ollamaTestResult   = pyqtSignal(bool, str)           # ok, message
+    nllbTestResult     = pyqtSignal(bool, str)           # ok, message
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -63,6 +64,7 @@ class BackendBridge(QObject):
         self._clear_context_cb     = None
         self._get_settings_cb      = None
         self._save_settings_cb     = None
+        self._set_ocr_mode_cb      = None
 
     # JS → Python
     @pyqtSlot()
@@ -130,6 +132,11 @@ class BackendBridge(QObject):
         if self._get_settings_cb:
             return json.dumps(self._get_settings_cb())
         return "{}"
+
+    @pyqtSlot(str)
+    def setOcrMode(self, mode: str) -> None:
+        if self._set_ocr_mode_cb:
+            self._set_ocr_mode_cb(mode)
 
     @pyqtSlot(str)
     def saveSettings(self, payload: str) -> None:

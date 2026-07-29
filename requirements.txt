@@ -7,6 +7,9 @@ numpy
 
 # OCR
 rapidocr-onnxruntime
+# Manga OCR japonês (engine mangá JP no dashboard): modelo ~400MB, baixa no 1º uso.
+# Requer torch (instalado pelo ultralytics/transformers acima).
+manga-ocr
 
 # Detecção de balões (YOLOv8)
 # torch é instalado pelo ultralytics. Para GPU NVIDIA, instale torch E torchvision
@@ -30,3 +33,6 @@ PyQt6-WebEngine
 # Utilitários
 Pillow
 huggingface_hub
+
+# Desenvolvimento / testes
+pytest

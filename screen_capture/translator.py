@@ -220,24 +220,45 @@ _PTBR_VOCAB = {
     "comboio": "trem", "comboios": "trens",
     "autocarro": "ônibus", "telemóvel": "celular",
     "frigorífico": "geladeira",
+    # v2 additions
+    "chávena": "xícara", "chávenas": "xícaras",
+    "ecrã": "tela", "ecrãs": "telas",
+    "miúdo": "garoto", "miúdos": "garotos",
+    "miúda": "garota", "miúdas": "garotas",
+    "fixe": "legal",
+    "bué": "muito",
 }
 _PTBR_WORD_RE = re.compile(r"[A-Za-zÀ-ÿ]+")
 # "precisar [adv] de <infinitivo>" → remove o "de" (EU "preciso de fazer" /
-# "preciso mais de fazer" → BR "preciso fazer" / "preciso mais fazer"). O grupo
-# do meio preserva advérbios entre o verbo e o "de".
+# "preciso mais de fazer" → BR "preciso fazer" / "preciso mais fazer").
 _PTBR_PRECISAR_DE = re.compile(
     r"\b(precis\w+)((?:\s+\w+){0,2})\s+de\s+(\w+(?:ar|er|ir))\b", re.IGNORECASE
+)
+# EU "estar/andar a + infinitivo" → BR gerúndio.
+# "estou a fazer" → "estou fazendo", "anda a correr" → "anda correndo".
+# Exclusivamente europeu — seguro converter sempre.
+_PTBR_ESTAR_A = re.compile(
+    r"\b(estou|está|estamos|estão|estava|estavam|estaria|estariam|estaria|"
+    r"estejam?|estiver|ando|anda|andamos|andam|andava|andavam)\s+a\s+"
+    r"([a-zà-ÿ]+?)(ar|er|ir)\b",
+    re.IGNORECASE,
+)
+_GERUNDIO = {"ar": "ando", "er": "endo", "ir": "indo"}
+
+# EU "ter de + infinitivo" → BR "ter que + infinitivo".
+# "tenho de ir" → "tenho que ir".
+_PTBR_TER_DE = re.compile(
+    r"\b(tenho|tens|tem|temos|têm|tinha|tinhas|tinham|terei|terá|teremos|terão|"
+    r"teria|terias|teriam)\s+de\s+(\w+(?:ar|er|ir))\b",
+    re.IGNORECASE,
 )
 
 
 def _to_ptbr(text: str) -> str:
-    """Heurística leve EU-PT → PT-BR sobre a saída do NLLB.
+    """Heurística EU-PT → PT-BR aplicada sobre a saída do NLLB.
 
-    O NLLB-200 só tem `por_Latn` (genérico), que puxa para o português europeu
-    ("estás", "quiseres", "preciso de fazer"). Esta passada corrige, por
-    substituição whole-word conservadora, os casos mais frequentes — conjugações
-    "tu", léxico e "precisar de + infinitivo". Não cobre tudo, mas aproxima do
-    PT-BR sem arriscar quebrar texto correto."""
+    Cobre: conjugações "tu", léxico EU→BR, "precisar de + inf",
+    "estar/andar a + inf" → gerúndio, "ter de + inf" → "ter que + inf"."""
     def _repl(m: "re.Match") -> str:
         w = m.group(0)
         rep = _PTBR_VERB.get(w.lower()) or _PTBR_VOCAB.get(w.lower())
@@ -245,9 +266,19 @@ def _to_ptbr(text: str) -> str:
             return w
         return rep[:1].upper() + rep[1:] if w[:1].isupper() else rep
 
+    def _estar_a_repl(m: "re.Match") -> str:
+        aux = m.group(1)
+        stem = m.group(2)
+        suffix = m.group(3).lower()
+        gerundio = stem + _GERUNDIO[suffix]
+        if aux[:1].isupper():
+            gerundio = gerundio[:1].upper() + gerundio[1:]
+        return f"{aux} {gerundio}"
+
     out = _PTBR_WORD_RE.sub(_repl, text)
-    # EU "preciso de fazer" → BR "preciso fazer" (só antes de infinitivo).
     out = _PTBR_PRECISAR_DE.sub(r"\1\2 \3", out)
+    out = _PTBR_ESTAR_A.sub(_estar_a_repl, out)
+    out = _PTBR_TER_DE.sub(r"\1 que \2", out)
     return out
 
 
@@ -344,6 +375,15 @@ class Translator:
     def set_ollama_model(self, model: str) -> None:
         self._ollama.model = model
         logging.info("Ollama: modelo alterado para '%s'", model)
+
+    def set_ocr_mode(self, mode: str) -> None:
+        """Define o idioma de origem baseado no modo de OCR ('en' ou 'ja').
+
+        No modo 'ja' o NLLB usa `jpn_Jpan` como língua de origem — traduz
+        japonês para PT-BR diretamente, sem precisar do passo EN→PT."""
+        src = "jpn_Jpan" if mode == "ja" else "eng_Latn"
+        self._nllb.src_lang = src
+        logging.info("OCR mode: %s → NLLB src_lang=%s", mode, src)
 
     def test_ollama(self) -> tuple[bool, str]:
         return self._ollama.test_connection()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 from concurrent.futures import ThreadPoolExecutor
 
 import cv2
@@ -64,6 +65,30 @@ def _binarize(enhanced: np.ndarray) -> np.ndarray:
     return cv2.morphologyEx(binary, cv2.MORPH_CLOSE, k)
 
 
+def _binarize_adaptive(enhanced: np.ndarray) -> np.ndarray:
+    """Limiarização adaptativa (janela 51px) para fontes decorativas/manuscritas.
+
+    Melhor que o Otsu global quando o fundo tem gradiente, textura ou quando a
+    fonte tem outline grosso — o threshold é calculado localmente por vizinhança,
+    então diferenças globais de iluminação não interferem."""
+    binary = cv2.adaptiveThreshold(
+        enhanced, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 51, 8
+    )
+    k = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+    return cv2.morphologyEx(binary, cv2.MORPH_CLOSE, k)
+
+
+def _binarize_blackhat(enhanced: np.ndarray) -> np.ndarray:
+    """Black top-hat isola strokes escuros em fundo texturizado ou com gradiente lento.
+
+    `close(img) - img` extrai feições escuras menores que o kernel — remove o fundo
+    gradiente antes do threshold, deixando só o núcleo dos glifos."""
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+    blackhat = cv2.morphologyEx(enhanced, cv2.MORPH_BLACKHAT, kernel)
+    _, thresh = cv2.threshold(blackhat, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    return cv2.bitwise_not(thresh)
+
+
 def _avg_conf(raw) -> float:
     return sum(float(r[2]) for r in raw) / len(raw) if raw else 0.0
 
@@ -96,9 +121,11 @@ def _deskew(gray: np.ndarray, k: float) -> np.ndarray:
 
 
 class OCREngine:
-    def __init__(self):
+    def __init__(self, force_extra_passes: bool = False):
         self._engine = RapidOCR()
         self._cache: dict[str, list[dict]] = {}
+        # Manga EN: sempre ativa os passes adaptativos sem esperar por baixa confiança.
+        self._force_extra = force_extra_passes
 
     def extract(self, image: np.ndarray) -> list[dict]:
         key = _crop_hash(image)
@@ -118,22 +145,27 @@ class OCREngine:
         enhanced = _enhance(image)
         binary = _binarize(enhanced)
 
-        # Passes concorrentes — padrão (enhanced) e binarizado (Otsu) — e ficamos
-        # com o de maior confiança média. O binarizado remove o halo cinza de
-        # fontes com sombra/outline grosso. Rodar em paralelo corta a latência de
-        # pior caso quando há cores livres; em páginas densas o ganho diminui
-        # porque o onnxruntime já satura os cores por inferência.
+        # Passes padrão: enhanced (CLAHE+unsharp) e binarizado Otsu.
+        # Texto itálico/inclinado: adiciona passe endireitado se |shear| >= 0.12.
         candidates = [enhanced, binary]
-
-        # Texto itálico/inclinado faz o RapidOCR duplicar/fundir glifos ("IT'S NOT"
-        # → "IT'S S NOT"). Havendo inclinação real, adiciona um passe endireitado.
         shear = _estimate_shear(binary)
         if abs(shear) >= 0.12:
             candidates.append(_deskew(enhanced, shear))
 
         with ThreadPoolExecutor(max_workers=len(candidates)) as pool:
             raws = list(pool.map(self._ocr_pass, candidates))
-        raw = max(raws, key=_avg_conf)
+        best_raw = max(raws, key=_avg_conf)
+
+        # Passes extras para fontes decorativas/manuscritas. Ativados sempre em
+        # modo Manga EN (force_extra=True) ou quando a confiança padrão é baixa
+        # (< 0.65) — webtoon com fonte limpa (0.8+) não paga custo adicional.
+        if self._force_extra or _avg_conf(best_raw) < 0.65:
+            extra = [_binarize_adaptive(enhanced), _binarize_blackhat(enhanced)]
+            with ThreadPoolExecutor(max_workers=len(extra)) as pool:
+                extra_raws = list(pool.map(self._ocr_pass, extra))
+            raw = max(raws + extra_raws, key=_avg_conf)
+        else:
+            raw = best_raw
 
         if not raw:
             return []
@@ -159,3 +191,48 @@ class OCREngine:
             })
 
         return detections
+
+
+class MangaOCREngine:
+    """OCR especializado para mangá japonês via manga-ocr (transformers).
+
+    Lida nativamente com texto vertical e horizontal em japonês. Retorna o
+    mesmo formato de lista de dicts que OCREngine para ser intercambiável no
+    pipeline. O modelo (~400 MB) é baixado automaticamente no primeiro uso.
+    """
+
+    def __init__(self) -> None:
+        self._mocr = None
+        self._cache: dict[str, list[dict]] = {}
+
+    def _ensure_loaded(self) -> None:
+        if self._mocr is not None:
+            return
+        from manga_ocr import MangaOcr  # pip install manga-ocr
+        logging.info("Carregando MangaOCR (primeira execução pode demorar)...")
+        self._mocr = MangaOcr()
+        logging.info("MangaOCR carregado.")
+
+    def extract(self, image: np.ndarray) -> list[dict]:
+        key = _crop_hash(image)
+        if key in self._cache:
+            return self._cache[key]
+        result = self._extract_uncached(image)
+        self._cache[key] = result
+        return result
+
+    def _extract_uncached(self, image: np.ndarray) -> list[dict]:
+        from PIL import Image
+        try:
+            self._ensure_loaded()
+            rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            pil = Image.fromarray(rgb)
+            text = self._mocr(pil).strip()
+            if not text:
+                return []
+            h, w = image.shape[:2]
+            box = [[0, 0], [w, 0], [w, h], [0, h]]
+            return [{"text": text, "box": box, "confidence": 1.0}]
+        except Exception as exc:
+            logging.warning("MangaOCR falhou: %s", exc)
+            return []
