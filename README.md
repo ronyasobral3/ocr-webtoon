@@ -73,6 +73,9 @@ pip install torch==2.12.0+cu126 torchvision==0.27.0+cu126 --index-url https://do
 
 # 2. Executar
 python -m screen_capture.main
+# ou
+.venv\Scripts\python.exe -m screen_capture.main
+
 ```
 
 Na primeira execução, os modelos (YOLOv8 ~52 MB, e NLLB-200 ~2,4 GB ou manga-ocr ~400 MB conforme o engine escolhido) são baixados automaticamente e armazenados em cache local.
