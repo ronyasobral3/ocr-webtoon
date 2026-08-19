@@ -28,10 +28,17 @@ def _sample_bg_color(crop: np.ndarray) -> tuple[int, int, int]:
 
 
 def _download_bubble_model() -> Path | None:
-    """Baixa o modelo do HuggingFace Hub na primeira execução (cache local)."""
+    """Baixa o modelo do HuggingFace Hub na primeira execução (cache local).
+
+    Tenta primeiro só o cache local (`local_files_only=True`): a checagem
+    remota do hf_hub_download custa segundos (rate limit sem token) mesmo
+    quando o arquivo já está em disco."""
     try:
         from huggingface_hub import hf_hub_download
-        path = hf_hub_download(repo_id=_HF_REPO, filename=_HF_FILE)
+        try:
+            path = hf_hub_download(repo_id=_HF_REPO, filename=_HF_FILE, local_files_only=True)
+        except Exception:
+            path = hf_hub_download(repo_id=_HF_REPO, filename=_HF_FILE)
         return Path(path)
     except Exception as exc:
         logging.warning("Não foi possível baixar o modelo YOLOv8 (%s) — usando detector OpenCV.", exc)

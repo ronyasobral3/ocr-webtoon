@@ -6,6 +6,9 @@ import numpy as np
 _MOTION_THRESHOLD = 0.02
 # Tempo de quietude (segundos) antes de liberar o processamento
 _DEBOUNCE_SECONDS = 0.3
+# Subamostragem espacial antes do diff: scroll altera blocos grandes da tela,
+# então 1 pixel a cada 4×4 detecta o mesmo movimento com 1/16 do custo.
+_DOWNSCALE = 4
 
 
 class MotionDetector:
@@ -21,10 +24,15 @@ class MotionDetector:
 
     def update(self, frame: np.ndarray) -> bool:
         """
-        Recebe o frame atual e retorna True se a tela está estável
-        (sem movimento por pelo menos `debounce` segundos).
+        Recebe o frame atual (BGR, BGRA ou gray) e retorna True se a tela está
+        estável (sem movimento por pelo menos `debounce` segundos).
         """
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        small = np.ascontiguousarray(frame[::_DOWNSCALE, ::_DOWNSCALE])
+        if small.ndim == 3:
+            code = cv2.COLOR_BGRA2GRAY if small.shape[2] == 4 else cv2.COLOR_BGR2GRAY
+            gray = cv2.cvtColor(small, code)
+        else:
+            gray = small
 
         if self._prev_gray is None:
             self._prev_gray = gray

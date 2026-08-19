@@ -15,6 +15,7 @@ for _noisy in ("httpcore", "httpx", "urllib3", "matplotlib", "PIL",
                "huggingface_hub", "filelock", "fontTools"):
     logging.getLogger(_noisy).setLevel(logging.WARNING)
 
+import cv2
 from PyQt6.QtCore import QPoint, QThread, pyqtSignal
 from PyQt6.QtWidgets import QApplication
 
@@ -38,6 +39,13 @@ class ProcessingThread(QThread):
     processing_started = pyqtSignal()
     pipeline_cancelled = pyqtSignal()        # scroll detectado durante OCR
 
+    # Modelos são caros de carregar (YOLO ~2s do disco, sessões ONNX) e são
+    # thread-safe para inferência — compartilhados entre instâncias para que
+    # Stop/Start (trocar região, pausar) não pague o load de novo.
+    _models_lock = threading.Lock()
+    _shared_detector: BubbleDetector | None = None
+    _shared_ocr: dict[str, object] = {}
+
     def __init__(self, region: dict, translator: Translator, debounce_ms: int = 300,
                  ocr_mode: str = "en"):
         super().__init__()
@@ -46,19 +54,38 @@ class ProcessingThread(QThread):
         self._debounce_s = max(0.05, debounce_ms / 1000.0)
         self._ocr_mode = ocr_mode
         self._running = True
+        # Evento do pipeline MAIS RECENTE. Cada pipeline recebe seu próprio
+        # Event no dispatch — um evento compartilhado permitiria que o clear()
+        # de um pipeline novo "descancelasse" um antigo ainda em execução.
         self._cancel = threading.Event()
+
+    @classmethod
+    def _get_detector(cls) -> BubbleDetector:
+        with cls._models_lock:
+            if cls._shared_detector is None:
+                cls._shared_detector = BubbleDetector()
+            return cls._shared_detector
+
+    @classmethod
+    def _get_ocr(cls, mode: str):
+        with cls._models_lock:
+            engine = cls._shared_ocr.get(mode)
+            if engine is None:
+                if mode == "ja":
+                    engine = MangaOCREngine()
+                elif mode == "manga_en":
+                    engine = OCREngine(force_extra_passes=True)
+                else:
+                    engine = OCREngine()
+                cls._shared_ocr[mode] = engine
+            return engine
 
     def run(self) -> None:
         self.status_update.emit("Carregando modelo de detecção...")
         capture = ScreenCapture(self._region)
         motion = MotionDetector(debounce=self._debounce_s)
-        detector = BubbleDetector()
-        if self._ocr_mode == "ja":
-            ocr = MangaOCREngine()
-        elif self._ocr_mode == "manga_en":
-            ocr = OCREngine(force_extra_passes=True)
-        else:
-            ocr = OCREngine()
+        detector = self._get_detector()
+        ocr = self._get_ocr(self._ocr_mode)
         mode = "MangaOCR" if self._ocr_mode == "ja" else ("YOLOv8" if detector.using_yolo else "OpenCV")
         self.status_update.emit(f"OCR em execução ({mode})...")
         translator = self._translator
@@ -74,7 +101,7 @@ class ProcessingThread(QThread):
 
         with capture:
             while self._running:
-                frame = capture.grab()
+                frame = capture.grab()  # BGRA cru — sem conversão no tick ocioso
                 is_stable = motion.update(frame)
 
                 if not is_stable:
@@ -104,14 +131,18 @@ class ProcessingThread(QThread):
                 # Roda em thread daemon para que o loop principal continue capturando
                 # frames e detectando movimento mesmo durante OCR/tradução.
                 already_processed = True
-                self._cancel.clear()
+                cancel = threading.Event()
+                self._cancel = cancel  # scroll/stop cancelam o pipeline mais recente
                 self.processing_started.emit()
                 self.status_update.emit("Processando...")
 
-                frame_snap = frame.copy()  # snapshot antes de ceder o loop
+                # Conversão BGRA→BGR só aqui (o pipeline precisa de BGR); a
+                # cópia resultante também serve de snapshot antes de ceder o loop.
+                frame_snap = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
 
-                def _worker(f=frame_snap, det=detector, eng=ocr, tr=translator, orig=origin):
-                    self._do_pipeline(f, det, eng, tr, orig)
+                def _worker(f=frame_snap, det=detector, eng=ocr, tr=translator,
+                            orig=origin, cn=cancel):
+                    self._do_pipeline(f, det, eng, tr, orig, cn)
 
                 threading.Thread(target=_worker, daemon=True).start()
 
@@ -124,13 +155,14 @@ class ProcessingThread(QThread):
         ocr,
         translator: Translator,
         origin: tuple,
+        cancel: threading.Event,
     ) -> None:
         """Executa detecção → OCR → tradução em thread daemon.
 
-        Verifica `self._cancel` em vários pontos; se setado (scroll detectado),
-        aborta sem emitir resultados e dispara `pipeline_cancelled`.
+        Verifica `cancel` (evento próprio deste pipeline) em vários pontos; se
+        setado (scroll detectado), aborta sem emitir resultados e dispara
+        `pipeline_cancelled`.
         """
-        cancel = self._cancel
         t0 = time.perf_counter()
 
         if cancel.is_set():
@@ -251,6 +283,9 @@ def main() -> None:
         translator.set_backend(saved["engine"])
     if saved.get("ocrMode"):
         translator.set_ocr_mode(saved["ocrMode"])
+    # Carrega o NLLB (engine padrão) em background antes do primeiro OCR —
+    # evita o stall de ~15s no primeiro balão da sessão.
+    translator.preload()
 
     worker: ProcessingThread | None = None
 

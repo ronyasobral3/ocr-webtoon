@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import mss
 import numpy as np
-import cv2
 
 from PyQt6.QtCore import Qt, QRect, QPoint, QEventLoop, pyqtSignal
 from PyQt6.QtGui import QColor, QPainter, QPen, QScreen
@@ -111,10 +110,13 @@ class ScreenCapture:
         self._sct = mss.mss()
 
     def grab(self) -> np.ndarray:
-        """Retorna o frame atual da região como array BGR."""
+        """Retorna o frame atual da região como array BGRA (formato nativo do mss).
+
+        Não converte para BGR aqui: o loop de captura roda a ~20 fps só para
+        detectar movimento, e a conversão de frame inteiro a cada tick seria
+        custo puro. Quem precisa de BGR (o pipeline) converte no disparo."""
         raw = self._sct.grab(self._region)
-        frame = np.array(raw)
-        return cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+        return np.array(raw)
 
     def close(self):
         self._sct.close()

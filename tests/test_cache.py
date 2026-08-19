@@ -65,13 +65,29 @@ def test_overwrite_same_key(cache):
 
 # ── persistência em disco ────────────────────────────────────────────────────
 
-def test_set_persists_to_disk(tmp_path, monkeypatch):
+def test_flush_persists_to_disk(tmp_path, monkeypatch):
     monkeypatch.setattr(cache_module, "_CACHE_FILE", tmp_path / "cache.json")
     c = TranslationCache()
     c.set("hello", "olá")
+    c.flush()
 
     data = json.loads((tmp_path / "cache.json").read_text(encoding="utf-8"))
     assert "olá" in data.values()
+
+
+def test_set_alone_does_not_write_immediately(tmp_path, monkeypatch):
+    # A escrita é adiada (debounce) — set() sozinho não deve tocar o disco.
+    monkeypatch.setattr(cache_module, "_CACHE_FILE", tmp_path / "cache.json")
+    c = TranslationCache()
+    c.set("hello", "olá")
+    assert not (tmp_path / "cache.json").exists()
+
+
+def test_flush_without_changes_is_noop(tmp_path, monkeypatch):
+    monkeypatch.setattr(cache_module, "_CACHE_FILE", tmp_path / "cache.json")
+    c = TranslationCache()
+    c.flush()  # nada sujo — não deve criar arquivo nem lançar
+    assert not (tmp_path / "cache.json").exists()
 
 
 def test_load_reads_existing_file(tmp_path, monkeypatch):
@@ -108,6 +124,7 @@ def test_clear_removes_file(tmp_path, monkeypatch):
     monkeypatch.setattr(cache_module, "_CACHE_FILE", path)
     c = TranslationCache()
     c.set("x", "y")
+    c.flush()
     assert path.exists()
     c.clear()
     assert not path.exists()

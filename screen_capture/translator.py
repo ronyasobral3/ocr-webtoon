@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import threading
 import time
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
@@ -302,23 +303,41 @@ class _NLLBBackend:
         self._tok = None
         self._model = None
         self._device = None
+        # Dois pipelines concorrentes podem pedir tradução ao mesmo tempo; sem o
+        # lock ambos carregam o modelo (2× VRAM, 2× tempo de load).
+        self._load_lock = threading.Lock()
 
     def _ensure_loaded(self) -> None:
         if self._model is not None:
             return
-        from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
-        import torch
+        with self._load_lock:
+            if self._model is not None:
+                return
+            from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+            import torch
 
-        t0 = time.perf_counter()
-        self._tok = AutoTokenizer.from_pretrained(self.model_name)
-        self._model = AutoModelForSeq2SeqLM.from_pretrained(self.model_name)
-        self._device = "cuda" if torch.cuda.is_available() else "cpu"
-        self._model.to(self._device)
-        self._model.eval()
-        logging.info(
-            "NLLB-200 carregado: %s (%s) em %.1fs",
-            self.model_name, self._device, time.perf_counter() - t0,
-        )
+            t0 = time.perf_counter()
+            self._device = "cuda" if torch.cuda.is_available() else "cpu"
+            # fp16 na GPU: ~2× mais rápido e metade da VRAM; na CPU fp16 é mais
+            # lento que fp32, então mantém fp32.
+            dtype = torch.float16 if self._device == "cuda" else torch.float32
+            self._tok = AutoTokenizer.from_pretrained(self.model_name)
+            model = AutoModelForSeq2SeqLM.from_pretrained(self.model_name, torch_dtype=dtype)
+            model.to(self._device)
+            model.eval()
+            # O generation_config do NLLB traz max_length=200; como geramos com
+            # max_new_tokens, o transformers emitiria um warning por chamada.
+            model.generation_config.max_length = None
+            self._model = model
+            logging.info(
+                "NLLB-200 carregado: %s (%s, %s) em %.1fs",
+                self.model_name, self._device, dtype, time.perf_counter() - t0,
+            )
+            if self._device == "cpu":
+                logging.warning(
+                    "NLLB rodando na CPU (torch sem CUDA neste ambiente) — traduções "
+                    "~3× mais lentas. Use o venv com torch+cu126 para usar a GPU."
+                )
 
     def translate_batch(self, texts: list[str], _context: list[tuple[str, str]]) -> list[str]:
         try:
@@ -329,9 +348,12 @@ class _NLLBBackend:
             inputs = self._tok(
                 texts, return_tensors="pt", padding=True, truncation=True, max_length=512,
             ).to(self._device)
-            with torch.no_grad():
+            # Greedy (num_beams=1): beam search 4× custa ~4× o decode e, para
+            # frases curtas de balão, a diferença de qualidade é imperceptível.
+            # max_new_tokens limita a geração ao tamanho realista de um balão.
+            with torch.inference_mode():
                 gen = self._model.generate(
-                    **inputs, forced_bos_token_id=tgt_id, max_length=512, num_beams=4,
+                    **inputs, forced_bos_token_id=tgt_id, max_new_tokens=128, num_beams=1,
                 )
             decoded = self._tok.batch_decode(gen, skip_special_tokens=True)
             return [_to_ptbr(t) for t in decoded]
@@ -384,6 +406,25 @@ class Translator:
         src = "jpn_Jpan" if mode == "ja" else "eng_Latn"
         self._nllb.src_lang = src
         logging.info("OCR mode: %s → NLLB src_lang=%s", mode, src)
+
+    def preload(self) -> None:
+        """Pré-carrega o backend NLLB em background quando ele é o ativo.
+
+        Sem isso, a 1ª tradução da sessão paga o load do modelo (~15s) com o
+        usuário esperando o balão aparecer. A tradução de aquecimento também
+        compila os kernels CUDA da 1ª inferência."""
+        if self._active is not self._nllb:
+            return
+
+        def _warm() -> None:
+            try:
+                self._nllb._ensure_loaded()
+                self._nllb.translate_batch(["Hello."], [])
+                logging.info("NLLB pré-carregado e aquecido.")
+            except Exception as exc:
+                logging.warning("Pré-carga do NLLB falhou: %s", exc)
+
+        threading.Thread(target=_warm, daemon=True, name="nllb-preload").start()
 
     def test_ollama(self) -> tuple[bool, str]:
         return self._ollama.test_connection()

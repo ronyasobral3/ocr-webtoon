@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 
 import cv2
@@ -11,6 +12,12 @@ from rapidocr_onnxruntime import RapidOCR
 _MIN_CONFIDENCE = 0.5
 _MIN_ALNUM_RATIO = 0.4
 _VOWELS = frozenset("aeiouAEIOU")
+# Confiança do passe `enhanced` acima da qual os demais passes são pulados —
+# fonte limpa de webtoon resolve no 1º passe; os outros seriam custo puro.
+_EARLY_EXIT_CONF = 0.8
+# Teto do cache de crops por engine (agora compartilhado entre sessões de OCR,
+# então precisa de eviction para não crescer sem limite em leituras longas).
+_CACHE_MAX = 256
 
 
 def _crop_hash(img: np.ndarray) -> str:
@@ -120,19 +127,67 @@ def _deskew(gray: np.ndarray, k: float) -> np.ndarray:
     return cv2.warpAffine(gray, M, (w, h), borderValue=255, flags=cv2.INTER_LINEAR)
 
 
+def _filter_raw(raw) -> list[dict]:
+    """Converte a saída bruta do RapidOCR em detecções filtradas."""
+    if not raw:
+        return []
+
+    detections = []
+    for box, text, confidence in raw:
+        if float(confidence) < _MIN_CONFIDENCE:
+            continue
+        text = text.strip()
+        if len(text) < 2:
+            continue
+        alnum_ratio = sum(c.isalnum() for c in text) / len(text)
+        if alnum_ratio < _MIN_ALNUM_RATIO:
+            continue
+        # Rejeita tokens sem nenhuma vogal — lixo de OCR (ex: "Lsnr", "w,i")
+        words = [w for w in text.split() if len(w) > 1]
+        if words and not any(_VOWELS & set(w) for w in words):
+            continue
+        detections.append({
+            "text": text,
+            "box": [list(map(int, pt)) for pt in box],
+            "confidence": float(confidence),
+        })
+
+    return detections
+
+
+class _LRUCache(OrderedDict):
+    """Cache LRU mínimo para resultados de OCR por hash do crop."""
+
+    def __init__(self, maxsize: int = _CACHE_MAX):
+        super().__init__()
+        self._maxsize = maxsize
+
+    def lookup(self, key: str):
+        value = self.get(key)
+        if value is not None:
+            self.move_to_end(key)
+        return value
+
+    def store(self, key: str, value) -> None:
+        self[key] = value
+        if len(self) > self._maxsize:
+            self.popitem(last=False)
+
+
 class OCREngine:
     def __init__(self, force_extra_passes: bool = False):
         self._engine = RapidOCR()
-        self._cache: dict[str, list[dict]] = {}
+        self._cache = _LRUCache()
         # Manga EN: sempre ativa os passes adaptativos sem esperar por baixa confiança.
         self._force_extra = force_extra_passes
 
     def extract(self, image: np.ndarray) -> list[dict]:
         key = _crop_hash(image)
-        if key in self._cache:
-            return self._cache[key]
+        cached = self._cache.lookup(key)
+        if cached is not None:
+            return cached
         result = self._extract_uncached(image)
-        self._cache[key] = result
+        self._cache.store(key, result)
         return result
 
     def _ocr_pass(self, gray: np.ndarray):
@@ -143,22 +198,29 @@ class OCREngine:
 
     def _extract_uncached(self, image: np.ndarray) -> list[dict]:
         enhanced = _enhance(image)
-        binary = _binarize(enhanced)
 
-        # Passes padrão: enhanced (CLAHE+unsharp) e binarizado Otsu.
-        # Texto itálico/inclinado: adiciona passe endireitado se |shear| >= 0.12.
-        candidates = [enhanced, binary]
+        # Passe 1: enhanced (CLAHE+unsharp) sozinho. Fonte limpa de webtoon —
+        # o caso comum — resolve aqui com confiança alta, pulando o passe Otsu,
+        # a estimativa de shear (13 warpAffines) e os passes extras.
+        raw_enhanced = self._ocr_pass(enhanced)
+        if not self._force_extra and _avg_conf(raw_enhanced) >= _EARLY_EXIT_CONF:
+            return _filter_raw(raw_enhanced)
+
+        # Passe 2: binarizado Otsu. Texto itálico/inclinado: adiciona passe
+        # endireitado se |shear| >= 0.12.
+        binary = _binarize(enhanced)
+        candidates = [binary]
         shear = _estimate_shear(binary)
         if abs(shear) >= 0.12:
             candidates.append(_deskew(enhanced, shear))
 
         with ThreadPoolExecutor(max_workers=len(candidates)) as pool:
-            raws = list(pool.map(self._ocr_pass, candidates))
+            raws = [raw_enhanced] + list(pool.map(self._ocr_pass, candidates))
         best_raw = max(raws, key=_avg_conf)
 
         # Passes extras para fontes decorativas/manuscritas. Ativados sempre em
         # modo Manga EN (force_extra=True) ou quando a confiança padrão é baixa
-        # (< 0.65) — webtoon com fonte limpa (0.8+) não paga custo adicional.
+        # (< 0.65).
         if self._force_extra or _avg_conf(best_raw) < 0.65:
             extra = [_binarize_adaptive(enhanced), _binarize_blackhat(enhanced)]
             with ThreadPoolExecutor(max_workers=len(extra)) as pool:
@@ -167,30 +229,7 @@ class OCREngine:
         else:
             raw = best_raw
 
-        if not raw:
-            return []
-
-        detections = []
-        for box, text, confidence in raw:
-            if float(confidence) < _MIN_CONFIDENCE:
-                continue
-            text = text.strip()
-            if len(text) < 2:
-                continue
-            alnum_ratio = sum(c.isalnum() for c in text) / len(text)
-            if alnum_ratio < _MIN_ALNUM_RATIO:
-                continue
-            # Rejeita tokens sem nenhuma vogal — lixo de OCR (ex: "Lsnr", "w,i")
-            words = [w for w in text.split() if len(w) > 1]
-            if words and not any(_VOWELS & set(w) for w in words):
-                continue
-            detections.append({
-                "text": text,
-                "box": [list(map(int, pt)) for pt in box],
-                "confidence": float(confidence),
-            })
-
-        return detections
+        return _filter_raw(raw)
 
 
 class MangaOCREngine:
@@ -203,7 +242,7 @@ class MangaOCREngine:
 
     def __init__(self) -> None:
         self._mocr = None
-        self._cache: dict[str, list[dict]] = {}
+        self._cache = _LRUCache()
 
     def _ensure_loaded(self) -> None:
         if self._mocr is not None:
@@ -215,10 +254,11 @@ class MangaOCREngine:
 
     def extract(self, image: np.ndarray) -> list[dict]:
         key = _crop_hash(image)
-        if key in self._cache:
-            return self._cache[key]
+        cached = self._cache.lookup(key)
+        if cached is not None:
+            return cached
         result = self._extract_uncached(image)
-        self._cache[key] = result
+        self._cache.store(key, result)
         return result
 
     def _extract_uncached(self, image: np.ndarray) -> list[dict]:
